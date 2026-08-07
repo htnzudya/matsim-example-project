@@ -25,7 +25,7 @@
 
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-		<maven.compiler.release>25</maven.compiler.release>
+		<maven.compiler.release>26</maven.compiler.release>
 	</properties>
 
 	<repositories>
@@ -149,6 +149,11 @@
 		<dependency>
 			<groupId>org.matsim.contrib</groupId>
 			<artifactId>vsp</artifactId>
+			<version>${matsim.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.matsim.contrib</groupId>
+			<artifactId>discrete_mode_choice</artifactId>
 			<version>${matsim.version}</version>
 		</dependency>
 <!--		<dependency>-->
