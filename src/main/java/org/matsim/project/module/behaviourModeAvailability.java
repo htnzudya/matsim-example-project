@@ -18,7 +18,7 @@ import org.matsim.project.model.alternatives;
  *   AV (privates automatisiertes
  *       Fahrzeug)                 - braucht NUR Fahrzeugzugang, KEINEN Fuehrerschein
  *                                    (das Fahrzeug faehrt selbst)
- *   PT, SAV                       - fuer alle Personen verfuegbar, keine Einschraenkung
+ *   PT, PSAV, SSAV                 - fuer alle Personen verfuegbar, keine Einschraenkung
  *
  * Fahrzeugzugang = PersonUtils.getCarAvail(person) != "never".
  * Fuehrerschein  = PersonUtils.getLicense(person) != "no".

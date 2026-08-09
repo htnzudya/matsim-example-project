@@ -30,7 +30,7 @@ import org.matsim.project.module.behaviourModule;
  * VSP-SVN geladen (siehe scenarios/oberlausitz-dresden/config.xml) - kein
  * lokaler Download noetig. Bewusst NICHT produktionsreif:
  *
- *   - DiscreteModeChoiceConfigurator.configureAsModeChoiceInTheLoop(config)
+ *   - DiscreteModeChoiceConfigurator.configureAsModeChoiceInTheL
  *     raeumt ALLE Replanning-Strategien global weg, auch die der Subpopulation
  *     "longDistanceFreight". Statt das subpopulationsbewusst zu loesen, wird
  *     diese Subpopulation hier einfach aus der Population entfernt (deren
@@ -151,7 +151,7 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 			person.getAttributes().putAttribute(cfg.getSegmentAttribute(), segmentIds.get(index));
 		}
 
-		// Schritt 7 (Netzwerkrouting): AV/SAV auf denselben Links wie CA erlauben,
+		// Schritt 7 (Netzwerkrouting): AV/PSAV/SSAV auf denselben Links wie CA erlauben,
 		// damit sie echtes, kongestionsabhaengiges Routing auf dem echten
 		// Strassennetz statt Teleport nutzen.
 		behaviourModule.addNetworkModesToLinks(scenario.getNetwork());

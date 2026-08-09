@@ -56,8 +56,8 @@ import org.matsim.vehicles.Vehicles;
  *      aufgerufen (Netzwerk ist erst dann geladen, nicht schon bei prepareConfig).
  *   3. Jede Person traegt ein Attribut mit ihrer Segment-ID; der Attributname
  *      steht in der Config unter "segmentAttribut" (Default: "segment").
- *   4. Die vier Modi CA, AV, PT, SAV richten sich selbst ein (Routing + Scoring-
- *      Defaults fuer AV/SAV, siehe unten) - das Szenario muss dafuer nichts
+ *   4. Die fuenf Modi CA, AV, PT, PSAV, SSAV richten sich selbst ein (Routing +
+ *      Scoring-Defaults fuer AV/PSAV/SSAV, siehe unten) - das Szenario muss dafuer nichts
  *      vorbereiten, ausser CA/PT wie ueblich (Netzwerk/Fahrplan).
  *   5. Falls das Szenario einen anderen Aktivitaetstyp als "home" fuer die
  *      Heimataktivitaet nutzt (z. B. equil: "h"), muss das vor
@@ -72,9 +72,9 @@ import org.matsim.vehicles.Vehicles;
  *   - Cumulative als TourEstimator, d. h. Trip-Nutzen werden je Tour aufsummiert
  *   - daraus die Wahlwahrscheinlichkeiten (MultinomialLogit)
  *   - behaviourModeAvailability als ModeAvailability("verhalten"): CA braucht
- *     Fuehrerschein UND Fahrzeugzugang, AV nur Fahrzeugzugang, PT/SAV sind
+ *     Fuehrerschein UND Fahrzeugzugang, AV nur Fahrzeugzugang, PT/PSAV/SSAV sind
  *     immer verfuegbar (siehe dortigen Javadoc)
- *   - AV/SAV als NETZWERKBASIERTE Modi (Schritt 7): dieselben Strassenlinks wie
+ *   - AV/PSAV/SSAV als NETZWERKBASIERTE Modi (Schritt 7): dieselben Strassenlinks wie
  *     CA, dieselbe Stau-Dynamik im QSim, eigene beobachtete (kongestionsabhaengige)
  *     Reisezeit fuers Routing - kein Teleport mehr, echte Kapazitaetskonkurrenz mit CA.
  *
@@ -109,7 +109,7 @@ public final class behaviourModule extends AbstractModule {
         dmcConfig.setTripEstimator(behaviourDiscreteModeChoiceExtension.TRIP_ESTIMATOR_NAME);
         dmcConfig.setTourEstimator(EstimatorModule.CUMULATIVE);
 
-        // Caching aktivieren: unser Estimator ruft fuer CA/AV/SAV echtes Netzwerk-
+        // Caching aktivieren: unser Estimator ruft fuer CA/AV/PSAV/SSAV echtes Netzwerk-
         // Routing auf (AbstractTripRouterEstimator routet jeden Kandidaten selbst),
         // das ist auf einem echten Netz (nicht equil) spuerbar teuer. Da unsere
         // Mixed-Logit-Ziehung ohnehin deterministisch aus Person+Modus ist (Schritt 6),
@@ -121,7 +121,7 @@ public final class behaviourModule extends AbstractModule {
 
         // Schritt 7: eigene ModeAvailability statt des DMC-Bausteins "Car" - filtert
         // CA (Fuehrerschein + Fahrzeugzugang) und AV (nur Fahrzeugzugang) je Person,
-        // siehe behaviourModeAvailability-Javadoc. Die vier Alternativen selbst kommen
+        // siehe behaviourModeAvailability-Javadoc. Die fuenf Alternativen selbst kommen
         // aus alternatives.java, nicht aus einer XML-Modusliste.
         dmcConfig.setModeAvailability(behaviourDiscreteModeChoiceExtension.MODE_AVAILABILITY_NAME);
 
@@ -139,22 +139,25 @@ public final class behaviourModule extends AbstractModule {
         RoutingConfigGroup routingConfig = config.routing();
         Set<String> networkModes = new LinkedHashSet<>(routingConfig.getNetworkModes());
         networkModes.add(alternatives.AV.getMatsimMode());
-        networkModes.add(alternatives.SAV.getMatsimMode());
+        networkModes.add(alternatives.PSAV.getMatsimMode());
+        networkModes.add(alternatives.SSAV.getMatsimMode());
         routingConfig.setNetworkModes(networkModes);
 
         Set<String> mainModes = new LinkedHashSet<>(config.qsim().getMainModes());
         mainModes.add(alternatives.AV.getMatsimMode());
-        mainModes.add(alternatives.SAV.getMatsimMode());
+        mainModes.add(alternatives.PSAV.getMatsimMode());
+        mainModes.add(alternatives.SSAV.getMatsimMode());
         config.qsim().setMainModes(mainModes);
 
-        // AV/SAV auch bei der Reisezeitmessung mitzaehlen, damit sie ihre EIGENE
+        // AV/PSAV/SSAV auch bei der Reisezeitmessung mitzaehlen, damit sie ihre EIGENE
         // beobachtete (kongestionsabhaengige) Reisezeit fuers Routing bekommen, statt
         // stillschweigend auf FreeSpeedTravelTime zurueckzufallen (siehe
         // TravelTimeCalculatorModule: nur Modi in analyzedModes bekommen einen echten
         // TravelTimeCalculator).
         Set<String> analyzedModes = new LinkedHashSet<>(config.travelTimeCalculator().getAnalyzedModes());
         analyzedModes.add(alternatives.AV.getMatsimMode());
-        analyzedModes.add(alternatives.SAV.getMatsimMode());
+        analyzedModes.add(alternatives.PSAV.getMatsimMode());
+        analyzedModes.add(alternatives.SSAV.getMatsimMode());
         config.travelTimeCalculator().setAnalyzedModes(analyzedModes);
 
         // MATSims eigene (von unserer behaviourUtilityFunction unabhaengige) Kern-
@@ -165,7 +168,7 @@ public final class behaviourModule extends AbstractModule {
         // Klassen-Defaults (keine erfundenen Werte) nachregistrieren, analog zu dem,
         // was MATSim selbst fuer car/pt/... tut.
         ScoringConfigGroup scoringConfig = config.scoring();
-        for (alternatives mode : new alternatives[] { alternatives.AV, alternatives.SAV }) {
+        for (alternatives mode : new alternatives[] { alternatives.AV, alternatives.PSAV, alternatives.SSAV }) {
             if (!scoringConfig.getModes().containsKey(mode.getMatsimMode())) {
                 scoringConfig.addModeParams(new ScoringConfigGroup.ModeParams(mode.getMatsimMode()));
             }
@@ -175,12 +178,13 @@ public final class behaviourModule extends AbstractModule {
     /**
      * Netzwerk-seitiger Teil der Einbindung fuer Schritt 7 (Netzwerkrouting). Muss
      * aus prepareScenario(...) aufgerufen werden (config-Phase hat noch kein Network).
-     * Erlaubt AV/SAV auf jedem Link, der CA bereits erlaubt - dieselben Strassen,
+     * Erlaubt AV/PSAV/SSAV auf jedem Link, der CA bereits erlaubt - dieselben Strassen,
      * dieselbe Stau-Dynamik. Modifiziert das uebergebene Network in-place.
      */
     public static void addNetworkModesToLinks(Network network) {
         String carMode = alternatives.CA.getMatsimMode();
-        Set<String> extraModes = Set.of(alternatives.AV.getMatsimMode(), alternatives.SAV.getMatsimMode());
+        Set<String> extraModes = Set.of(alternatives.AV.getMatsimMode(),
+                alternatives.PSAV.getMatsimMode(), alternatives.SSAV.getMatsimMode());
 
         for (Link link : network.getLinks().values()) {
             if (link.getAllowedModes().contains(carMode)) {
@@ -194,9 +198,9 @@ public final class behaviourModule extends AbstractModule {
     /**
      * Fahrzeugtyp-seitiger Teil der Einbindung fuer Schritt 7. Manche Szenarien
      * (z. B. Oberlausitz/Dresden mit vehiclesSource=modeVehicleTypesFromVehiclesData) verlangen
-     * einen registrierten VehicleType pro QSim-Hauptmodus - ohne AV/SAV-Eintrag
+     * einen registrierten VehicleType pro QSim-Hauptmodus - ohne AV/PSAV/SSAV-Eintrag
      * bricht die Simulation mit "Could not find requested vehicle type" ab. Klont
-     * dafuer den CA-Fahrzeugtyp (gleiche physische Eigenschaften) fuer AV/SAV. Bei
+     * dafuer den CA-Fahrzeugtyp (gleiche physische Eigenschaften) fuer AV/PSAV/SSAV. Bei
      * Szenarien ohne registrierte Fahrzeugtypen (z. B. equil, defaultVehicle-Quelle)
      * ist das ein No-Op - muss trotzdem aus prepareScenario(...) aufgerufen werden.
      */
@@ -208,7 +212,7 @@ public final class behaviourModule extends AbstractModule {
             return;
         }
 
-        for (alternatives mode : new alternatives[] { alternatives.AV, alternatives.SAV }) {
+        for (alternatives mode : new alternatives[] { alternatives.AV, alternatives.PSAV, alternatives.SSAV }) {
             Id<VehicleType> typeId = Id.create(mode.getMatsimMode(), VehicleType.class);
             if (!vehicles.getVehicleTypes().containsKey(typeId)) {
                 VehicleType newType = VehicleUtils.createVehicleType(typeId, mode.getMatsimMode());

@@ -5,24 +5,34 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Die vier Modusalternativen des Wahlmodells.
+ * Die fuenf Modusalternativen des Wahlmodells.
  *
- * CA  = Conventional Automobile (konventioneller Pkw)
- * AV  = Automated Vehicle (privates automatisiertes Fahrzeug)
- * PT  = Public Transport (OEPNV)
- * SAV = Shared Automated Vehicle (geteiltes automatisiertes Fahrzeug)
+ * CA   = Conventional Automobile (konventioneller Pkw)
+ * AV   = Automated Vehicle (privates automatisiertes Fahrzeug)
+ * PT   = Public Transport (OEPNV)
+ * PSAV = Pooled Shared Automated Vehicle (dynamisches Ride-Pooling, Door-to-
+ *        Door, kleine Flotte - wie UberPool/MOIA, nur autonom)
+ * SSAV = Shuttle Shared Automated Vehicle (autonomer Shuttle auf Semi-
+ *        Fixroute mit virtuellen Haltestellen, Corner-to-Corner, groessere
+ *        Fahrzeugkapazitaet)
+ *
+ * PSAV und SSAV sind beide "geteilt" (das S in SAV) und ersetzen die
+ * vormalige, undifferenzierte SAV-Alternative - sie unterscheiden sich im
+ * Betriebskonzept (dynamisches Pooling vs. halbfeste Linie), nicht darin,
+ * ob geteilt wird.
  *
  * Jede Alternative traegt den MATSim-Modusstring, unter dem sie im Netzwerk/
  * bei der Verkehrsmittelwahl (discrete_mode_choice) auftaucht. CA und PT sind
- * MATSim-Standardmodi ("car"/"pt"); AV/SAV sind Platzhalter-Modusstrings, die
- * erst mit der Routing-/Fahrzeugkonfiguration aus Schritt 7 tatsaechlich
+ * MATSim-Standardmodi ("car"/"pt"); AV/PSAV/SSAV sind Platzhalter-Modusstrings,
+ * die erst mit der Routing-/Fahrzeugkonfiguration aus Schritt 7 tatsaechlich
  * simulierbar werden (aktuell z. B. noch nicht im equil-Szenario aktiv).
  */
 public enum alternatives {
     CA("car"),
     AV("av"),
     PT("pt"),
-    SAV("sav");
+    PSAV("psav"),
+    SSAV("ssav");
 
     private final String matsimMode;
 

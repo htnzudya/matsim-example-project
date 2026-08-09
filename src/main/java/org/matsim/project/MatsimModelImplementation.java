@@ -64,7 +64,7 @@ public class MatsimModelImplementation extends MATSimApplication {
 		// Das komplette Verhaltensmodell-Add-on inkl. DMC-Verdrahtung (Config-Teil).
 		behaviourModule.configureController(config);
 
-		// Echte Koeffizienten nachladen - 8 Segmente + modeParams fuer CA/AV/PT/SAV,
+		// Echte Koeffizienten nachladen - 8 Segmente + modeParams fuer CA/AV/PT/PSAV/SSAV,
 		// so wie in scenarios/testszenario/config.xml gepflegt. Kein einziger
 		// Zahlenwert hier im Code, siehe behaviourConfigGroup-Vertrag.
 		new ConfigReader(config).readFile("scenarios/testszenario/config.xml");

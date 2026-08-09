@@ -212,20 +212,55 @@
                    value="ptAffinity=0,techAffinity=0,carsharingAffinity=0,carAffinity=0,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
         </parameterset>
 
+        <!-- PSAV = gepooltes SAV (dynamisches Ride-Pooling, Door-to-Door, kleine
+             Flotte, wie UberPool/MOIA autonom). Gegenueber der vormaligen
+             undifferenzierten SAV-Alternative: staerkere IVT-Straf (Umweg-
+             Unsicherheit durch Pooling mit Fremden), dafuer bessere ASC
+             (Door-to-Door-Komfort) und ein zusaetzlicher perceivedRisk-Gamma
+             (Mitfahren mit Fremden). betaWaitTime ist wie bei allen Modi
+             aktuell wirkungslos (siehe behaviourUtilityEstimator: waitTimeHours
+             ist ein bekannter 0.0-Platzhalter mangels Dispatch-/Wartezeitmodell),
+             steht aber bereits fuer eine spaetere echte DRT-Wartezeit bereit. -->
         <parameterset type="modeParams">
-            <param name="mode" value="SAV"/>
-            <param name="asc" value="-0.90"/>
-            <param name="ascSd" value="0.70"/>
-            <param name="betaInVehicleTime" value="-5.50"/>
-            <param name="betaInVehicleTimeSd" value="1.40"/>
-            <param name="betaWaitTime" value="0"/>
-            <param name="betaWaitTimeSd" value="0"/>
-            <param name="betaCost" value="-0.22"/>
+            <param name="mode" value="PSAV"/>
+            <param name="asc" value="-0.70"/>
+            <param name="ascSd" value="0.65"/>
+            <param name="betaInVehicleTime" value="-6.00"/>
+            <param name="betaInVehicleTimeSd" value="1.50"/>
+            <param name="betaWaitTime" value="-3.00"/>
+            <param name="betaWaitTimeSd" value="0.80"/>
+            <param name="betaCost" value="-0.20"/>
             <param name="betaCostSd" value="0.05"/>
             <param name="costPerKm" value="0.0"/>
-            <param name="delta" value="0.20"/>
+            <param name="delta" value="0.15"/>
             <param name="gamma"
-                   value="ptAffinity=0,techAffinity=0.30,carsharingAffinity=0.55,carAffinity=-0.35,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
+                   value="ptAffinity=0,techAffinity=0.35,carsharingAffinity=0.60,carAffinity=-0.30,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0.15,perceivedRisk=-0.20,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
+            <param name="gammaSd"
+                   value="ptAffinity=0,techAffinity=0,carsharingAffinity=0,carAffinity=0,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
+        </parameterset>
+
+        <!-- SSAV = geshuttletes SAV (autonomer Shuttle auf Semi-Fixroute mit
+             virtuellen Haltestellen, Corner-to-Corner, groessere Kapazitaet).
+             Gegenueber PSAV: schlechtere ASC (Fussweg zur Haltestelle statt
+             Door-to-Door), dafuer geringere IVT-Strafe (feste Route = planbarer,
+             weniger Umweg-Unsicherheit als dynamisches Pooling) und ein
+             ptAffinity-Gamma (fuehlt sich eher wie OEPNV an als PSAV). Hoehere
+             betaWaitTime-Straf als PSAV (Umlauf-/Taktwartezeit statt On-Demand-
+             Dispatch), aktuell ebenfalls wirkungslos, siehe PSAV-Kommentar. -->
+        <parameterset type="modeParams">
+            <param name="mode" value="SSAV"/>
+            <param name="asc" value="-1.10"/>
+            <param name="ascSd" value="0.75"/>
+            <param name="betaInVehicleTime" value="-5.00"/>
+            <param name="betaInVehicleTimeSd" value="1.30"/>
+            <param name="betaWaitTime" value="-4.50"/>
+            <param name="betaWaitTimeSd" value="1.00"/>
+            <param name="betaCost" value="-0.18"/>
+            <param name="betaCostSd" value="0.05"/>
+            <param name="costPerKm" value="0.0"/>
+            <param name="delta" value="0.25"/>
+            <param name="gamma"
+                   value="ptAffinity=0.25,techAffinity=0.20,carsharingAffinity=0.45,carAffinity=-0.30,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0.15,perceivedUsefulness=0"/>
             <param name="gammaSd"
                    value="ptAffinity=0,techAffinity=0,carsharingAffinity=0,carAffinity=0,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
         </parameterset>

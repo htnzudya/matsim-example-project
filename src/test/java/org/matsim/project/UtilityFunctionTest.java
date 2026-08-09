@@ -97,7 +97,8 @@ public class UtilityFunctionTest {
         v.put(alternatives.CA, -2.0);
         v.put(alternatives.AV, -1.5);
         v.put(alternatives.PT, -6.0);
-        v.put(alternatives.SAV, -3.5);
+        v.put(alternatives.PSAV, -3.5);
+        v.put(alternatives.SSAV, -4.0);
 
         double sum = f.probabilities(v).values().stream()
                 .mapToDouble(Double::doubleValue).sum();
