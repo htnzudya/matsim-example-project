@@ -87,7 +87,7 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 	protected Config prepareConfig(Config config) {
 
 		config.controller().setOverwriteFileSetting(OverwriteFileSetting.deleteDirectoryIfExists);
-		config.controller().setLastIteration(10);
+		config.controller().setLastIteration(9);
 
 		// Oberlausitz/Dresden nutzt bereits "home" als Heimataktivitaet - kein
 		// Override noetig (anders als equil mit "h").
