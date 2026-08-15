@@ -107,5 +107,34 @@ public class demo {
             }
             System.out.println(row);
         }
+
+        // ---------- Induzierte Nachfrage: Wegeanzahl UND Zielwahl/Distanz ----------
+        // Illustrativ: Basiswerte T_n^base=1 Weg/Tag, D_n^base=12 km (derselbe
+        // Beispielweg wie oben). EIN theta steuert das Personenkilometer-
+        // Wachstum insgesamt, tripShare teilt es auf - T_ind * D_ind = VKM_ind,
+        // keine Doppelzaehlung (siehe inducedDemandModel-Javadoc). D_n^ind ist
+        // weiterhin eine reine Kennzahl, keine tatsaechliche Zielverlegung.
+        inducedDemandModel demandModel = cfg.buildInducedDemandModel(f);
+        double baseTripCount = 1.0;
+        double baseDistanceKm = 12.0;
+
+        System.out.println();
+        System.out.println("=".repeat(78));
+        System.out.println("INDUZIERTE NACHFRAGE - theta=" + demandModel.getTheta()
+                + ", tripShare=" + demandModel.getTripShare() + " (Platzhalter)");
+        System.out.println("Lambda_base: nur CA+PT. Lambda_AVM: CA+AV+PT+PSAV+SSAV. Basis: "
+                + baseTripCount + " Weg/Tag, " + baseDistanceKm + " km");
+        System.out.println("=".repeat(78));
+
+        System.out.printf("  %-30s %10s %10s %10s %8s %10s %10s%n",
+                "Segment", "Lambda_b", "Lambda_A", "DeltaLambda", "T_ind", "D_ind(km)", "VKM_ind");
+        System.out.println("  " + "-".repeat(90));
+        for (agentProfile segmentProfile : segments.values()) {
+            inducedDemandModel.Result result = demandModel.compute(
+                    segmentProfile, params, trip, alternatives.CA, choiceSet, baseTripCount, baseDistanceKm);
+            System.out.printf("  %-30s %10.3f %10.3f %10.3f %8.3f %10.3f %10.3f%n",
+                    segmentProfile.getSegmentId(), result.lambdaBase(), result.lambdaAvm(),
+                    result.deltaLogsum(), result.inducedTrips(), result.inducedDistanceKm(), result.inducedPersonKm());
+        }
     }
 }

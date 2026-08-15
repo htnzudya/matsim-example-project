@@ -10,16 +10,23 @@ import java.util.stream.Collectors;
  * CA   = Conventional Automobile (konventioneller Pkw)
  * AV   = Automated Vehicle (privates automatisiertes Fahrzeug)
  * PT   = Public Transport (OEPNV)
- * PSAV = Pooled Shared Automated Vehicle (dynamisches Ride-Pooling, Door-to-
- *        Door, kleine Flotte - wie UberPool/MOIA, nur autonom)
- * SSAV = Shuttle Shared Automated Vehicle (autonomer Shuttle auf Semi-
- *        Fixroute mit virtuellen Haltestellen, Corner-to-Corner, groessere
- *        Fahrzeugkapazitaet)
+ * PSAV = Pooled Shared Automated Vehicle (dynamisches Ride-Pooling MIT
+ *        virtuellen Haltestellen - wie MOIA, nur autonom; mehrere Fahrgaeste
+ *        mit unterschiedlichem Ziel teilen sich gleichzeitig ein Fahrzeug,
+ *        Zu-/Abgang zu Fuss zur naechsten virtuellen Haltestelle statt
+ *        reinem Door-to-Door)
+ * SSAV = Shuttle Shared Automated Vehicle (geshuttelter Robotaxi-Dienst,
+ *        Door-to-Door, aber OHNE Pooling - befoerdert immer nur einen
+ *        Kunden/eine Buchung gleichzeitig, "shared" im Sinne einer
+ *        flottenbetriebenen, nicht privat besessenen Fahrzeugflotte)
  *
- * PSAV und SSAV sind beide "geteilt" (das S in SAV) und ersetzen die
- * vormalige, undifferenzierte SAV-Alternative - sie unterscheiden sich im
- * Betriebskonzept (dynamisches Pooling vs. halbfeste Linie), nicht darin,
- * ob geteilt wird.
+ * KORREKTUR (Schritt 9): PSAV/SSAV waren zuvor vertauscht implementiert
+ * (PSAV faelschlich Door-to-Door, SSAV faelschlich mit Haltestellen UND
+ * groesserer Kapazitaet). Das S in SAV bezieht sich bei SSAV auf die
+ * geteilte FLOTTE (kein privater Besitz), nicht auf geteilte FAHRTEN -
+ * PSAV und SSAV unterscheiden sich im Betriebskonzept (gepooltes
+ * Haltestellensystem vs. exklusives Door-to-Door), nicht beide darin, ob
+ * gleichzeitig mehrere Fahrgaeste an Bord sind.
  *
  * Jede Alternative traegt den MATSim-Modusstring, unter dem sie im Netzwerk/
  * bei der Verkehrsmittelwahl (discrete_mode_choice) auftaucht. CA und PT sind

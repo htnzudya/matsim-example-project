@@ -8,6 +8,7 @@ import java.util.Random;
 import org.matsim.api.core.v01.population.Leg;
 import org.matsim.api.core.v01.population.Person;
 import org.matsim.api.core.v01.population.PlanElement;
+import org.matsim.contrib.drt.routing.DrtRoute;
 import org.matsim.contribs.discrete_mode_choice.components.estimators.AbstractTripRouterEstimator;
 import org.matsim.contribs.discrete_mode_choice.model.DiscreteModeChoiceTrip;
 import org.matsim.contribs.discrete_mode_choice.model.trip_based.candidates.TripCandidate;
@@ -35,9 +36,21 @@ import com.google.inject.Inject;
  *
  * BEKANNTE PLATZHALTER (siehe TripContext-Javadoc: "Diese Werte liefert im
  * spaeteren Einsatz die Simulation (Router, Fahrplan, Tarifmodell)"):
- *   - waitTimeHours ist aktuell immer 0.0 - eine echte Zugangs-/Wartezeit
- *     braucht den PTWaitingTimeEstimator des Contribs (Kandidat fuer einen
- *     spaeteren Schritt).
+ *   - waitTimeHours ist fuer PSAV/SSAV (Schritt 8: echte DRT-Flotten) seit
+ *     Schritt 9 EXPECTED_WAIT_TIME_SHARE_OF_MAX_WAIT * maxWaitDuration aus den
+ *     DrtRouteConstraints des gerouteten Trips (siehe waitTimeHours(...)) -
+ *     eine grobe Naeherung, KEINE dynamische Schaetzung aus dem tatsaechlichen
+ *     Systemzustand: DrtRouteCreator setzt diese Constraint bereits bei jeder
+ *     Routung (auch ohne DRT-Estimator-Konfiguration), sie ist aber eine
+ *     GARANTIERTE OBERGRENZE (drtOptimizationConstraints.maxWaitTime aus der
+ *     Config), kein Erwartungswert. Eine echte, aus beobachteten Wartezeiten
+ *     abgeleitete Schaetzung braeuchte entweder DRTs eigenen DrtEstimator (der
+ *     aber nur im simulationType=estimateAndTeleport-Modus greift und damit
+ *     die echte Flottensimulation/Leerfahrten ersetzen wuerde, siehe
+ *     DrtModeRoutingModule.install()) oder eine eigene Auswertung beobachteter
+ *     Wartezeiten aus Vor-Iterationen (Kandidat fuer einen spaeteren Schritt).
+ *     Fuer CA/AV/PT bleibt waitTimeHours weiterhin 0.0 - eine echte PT-Zugangs-
+ *     /Wartezeit braucht den PTWaitingTimeEstimator des Contribs.
  *   - costEuro = modeParams.costPerKm * distanceKm (echte, aus dem gerouteten
  *     Trip berechnete Distanz). Kein Grundpreis/Tarifstufen - reine lineare
  *     Distanzkosten. Solange costPerKm in der Config auf 0.0 steht (aktueller
@@ -137,6 +150,15 @@ public class behaviourUtilityEstimator extends AbstractTripRouterEstimator {
         return profile != null ? profile : new agentProfile("__neutral__", Map.of());
     }
 
+    /**
+     * Anteil von drtOptimizationConstraints.maxWaitTime, der als erwartete
+     * Wartezeit fuer PSAV/SSAV angenommen wird (siehe waitTimeHours(...) und
+     * Klassen-Javadoc: maxWaitTime ist eine garantierte Obergrenze, kein
+     * Erwartungswert). PLATZHALTER, noch nicht aus beobachteten Wartezeiten
+     * kalibriert.
+     */
+    static final double EXPECTED_WAIT_TIME_SHARE_OF_MAX_WAIT = 0.5;
+
     private TripContext buildTripContext(DiscreteModeChoiceTrip trip, List<? extends PlanElement> routedTrip,
             double costPerKm) {
 
@@ -154,6 +176,21 @@ public class behaviourUtilityEstimator extends AbstractTripRouterEstimator {
 
         double costEuro = costPerKm * distanceKm;
 
-        return new TripContext(totalTravelTimeHours, 0.0, costEuro, distanceKm);
+        return new TripContext(totalTravelTimeHours, waitTimeHours(routedTrip), costEuro, distanceKm);
+    }
+
+    /**
+     * Erwartete Wartezeit fuer DRT-Modi (PSAV/SSAV), siehe Klassen-Javadoc und
+     * EXPECTED_WAIT_TIME_SHARE_OF_MAX_WAIT. Fuer alle anderen Modi (CA/AV/PT,
+     * keine DrtRoute) weiterhin 0.0 - unveraendertes Verhalten.
+     */
+    private double waitTimeHours(List<? extends PlanElement> routedTrip) {
+        double waitTimeSeconds = 0.0;
+        for (PlanElement element : routedTrip) {
+            if (element instanceof Leg leg && leg.getRoute() instanceof DrtRoute drtRoute) {
+                waitTimeSeconds += EXPECTED_WAIT_TIME_SHARE_OF_MAX_WAIT * drtRoute.getConstraints().maxWaitDuration();
+            }
+        }
+        return waitTimeSeconds / 3600.0;
     }
 }

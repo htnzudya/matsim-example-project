@@ -47,8 +47,14 @@ public final class modeParams {
      */
     private final double costPerKm;
 
-    /** Traegheits-/Gewohnheitsbonus, wenn dieser Modus zuletzt gewaehlt wurde. */
-    private final double delta;
+    /**
+     * Traegheits-/Gewohnheitsbonus je vorherigem Modus (Schluessel =
+     * {@link alternatives#name()}), wenn dieser Modus zuletzt gewaehlt wurde.
+     * Der bisherige Spezialfall "Bonus nur bei identischem Vor-/Zielmodus"
+     * ist der Diagonaleintrag dieser Matrix; andere Eintraege erlauben
+     * asymmetrische Uebergaenge (z. B. CA -> PAV != PAV -> CA).
+     */
+    private final Map<String, Double> deltaByPreviousMode;
 
     private final Map<String, Double> gamma;
     private final Map<String, Double> gammaSd;
@@ -59,7 +65,7 @@ public final class modeParams {
                       double betaWaitTime, double betaWaitTimeSd,
                       double betaCost, double betaCostSd,
                       double costPerKm,
-                      double delta,
+                      Map<String, Double> deltaByPreviousMode,
                       Map<String, Double> gamma,
                       Map<String, Double> gammaSd) {
         this.mode = mode;
@@ -72,7 +78,7 @@ public final class modeParams {
         this.betaCost = betaCost;
         this.betaCostSd = betaCostSd;
         this.costPerKm = costPerKm;
-        this.delta = delta;
+        this.deltaByPreviousMode = Collections.unmodifiableMap(new LinkedHashMap<>(deltaByPreviousMode));
         this.gamma = Collections.unmodifiableMap(new LinkedHashMap<>(gamma));
         this.gammaSd = Collections.unmodifiableMap(new LinkedHashMap<>(gammaSd));
     }
@@ -84,10 +90,11 @@ public final class modeParams {
                       double betaWaitTime, double betaWaitTimeSd,
                       double betaCost, double betaCostSd,
                       double costPerKm,
-                      double delta,
+                      Map<String, Double> deltaByPreviousMode,
                       Map<String, Double> gamma) {
         this(mode, asc, ascSd, betaInVehicleTime, betaInVehicleTimeSd,
-                betaWaitTime, betaWaitTimeSd, betaCost, betaCostSd, costPerKm, delta, gamma, Map.of());
+                betaWaitTime, betaWaitTimeSd, betaCost, betaCostSd, costPerKm,
+                deltaByPreviousMode, gamma, Map.of());
     }
 
     public alternatives getMode() {
@@ -114,8 +121,13 @@ public final class modeParams {
         return costPerKm;
     }
 
-    public double getDelta() {
-        return delta;
+    /** Traegheitsbonus fuer diesen Modus, gegeben den vorherigen Modus (0.0, falls kein Eintrag). */
+    public double getDelta(alternatives previousMode) {
+        return deltaByPreviousMode.getOrDefault(previousMode.name(), 0.0);
+    }
+
+    public Map<String, Double> getDeltaByPreviousMode() {
+        return deltaByPreviousMode;
     }
 
     public double getGamma(String construct) {
@@ -140,8 +152,9 @@ public final class modeParams {
      * sonst waere die Praeferenz eines Agenten nicht stabil.
      *
      * Bei allen Streuungen = 0 gibt die Methode identische Werte zurueck
-     * (das Modell degeneriert dann sauber zum MNL). delta und costPerKm werden
-     * nicht gezogen (costPerKm ist ein Tarif-/LOS-Parameter, keine Praeferenz).
+     * (das Modell degeneriert dann sauber zum MNL). deltaByPreviousMode und
+     * costPerKm werden nicht gezogen (costPerKm ist ein Tarif-/LOS-Parameter,
+     * keine Praeferenz; fuer deltaByPreviousMode liegen keine SD-Daten vor).
      */
     public modeParams draw(Random random) {
         Map<String, Double> drawnGamma = new LinkedHashMap<>();
@@ -156,7 +169,7 @@ public final class modeParams {
                 betaWaitTime + betaWaitTimeSd * random.nextGaussian(), 0.0,
                 betaCost + betaCostSd * random.nextGaussian(), 0.0,
                 costPerKm,
-                delta,
+                deltaByPreviousMode,
                 drawnGamma,
                 Map.of()
         );

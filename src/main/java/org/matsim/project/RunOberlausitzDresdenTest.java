@@ -13,6 +13,8 @@ import org.matsim.api.core.v01.population.Activity;
 import org.matsim.api.core.v01.population.Person;
 import org.matsim.api.core.v01.population.PlanElement;
 import org.matsim.application.MATSimApplication;
+import org.matsim.contrib.drt.run.MultiModeDrtConfigGroup;
+import org.matsim.contrib.dvrp.run.DvrpQSimComponents;
 import org.matsim.core.config.Config;
 import org.matsim.core.config.ConfigReader;
 import org.matsim.core.config.groups.ScoringConfigGroup;
@@ -44,9 +46,34 @@ import org.matsim.project.module.behaviourModule;
  *   - Lizenz-Attribut existiert in den Oberlausitz/Dresden-Daten nicht, nur
  *     carAvail - CarModeAvailability behandelt fehlende Lizenz als
  *     "vorhanden" (Default).
+ *   - PSAV/SSAV sind seit Schritt 8 echte DRT-Flotten (matsim-contrib "drt"/
+ *     "dvrp", siehe behaviourModule.prepareDrtFleets) mit Dispatch,
+ *     Warteschlangen und Leerfahrten (Rebalancing) statt reiner Netzwerk-Modi.
+ *     Seit Schritt 9 mit korrigierten Betriebskonzepten (siehe alternatives.
+ *     java): PSAV = gepoolt mit virtuellen Haltestellen (operationalScheme=
+ *     stopbased), SSAV = Door-to-Door-Robotaxi ohne Pooling (capacity=1).
+ *     Flottengroesse/-kapazitaet sind Platzhalter (siehe PSAV_FLEET_SIZE etc.
+ *     unten), nicht aus einer Bedarfsanalyse kalibriert.
  */
 @CommandLine.Command(header = ":: OberlausitzDresdenTest ::", version = "1.0")
 public class RunOberlausitzDresdenTest extends MATSimApplication {
+
+	// Schritt 8/9 (SAV-Flotte): Flottengroesse/-kapazitaet je Modus. PLATZHALTER,
+	// nicht aus einer Bedarfsanalyse kalibriert (grobe Groessenordnung: ~94.500
+	// simulierte Personen, PSAV/SSAV-Modusanteil bislang je ~7-9% der Wege -
+	// siehe modestats.csv frueherer Laeufe). Siehe alternatives.java fuer die
+	// (in Schritt 9 korrigierten) Betriebskonzepte:
+	//   PSAV = gepoolt MIT virtuellen Haltestellen (wie MOIA) - mehrere
+	//          Fahrgaeste gleichzeitig an Bord, daher weniger Fahrzeuge noetig
+	//          fuer dieselbe Nachfrage.
+	//   SSAV = Door-to-Door-Robotaxi OHNE Pooling (capacity=1) - jede Fahrt
+	//          bindet ein ganzes Fahrzeug exklusiv, daher deutlich mehr
+	//          Fahrzeuge noetig fuer dieselbe Nachfrage.
+	private static final int PSAV_FLEET_SIZE = 600;
+	private static final int PSAV_CAPACITY = 6;
+	private static final int PSAV_STOP_COUNT = 3000;
+	private static final int SSAV_FLEET_SIZE = 1500;
+	private static final int SSAV_CAPACITY = 1;
 
 	public RunOberlausitzDresdenTest() {
 		super();
@@ -160,10 +187,23 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 		// - QSim braucht dafuer einen registrierten VehicleType je Hauptmodus,
 		// sonst "Could not find requested vehicle type = av".
 		behaviourModule.addVehicleTypesForModes(scenario);
+
+		// Schritt 8 (SAV-Flotte): PSAV/SSAV als echte DRT-Flotten mit Dispatch,
+		// Warteschlangen und Leerfahrten statt reiner Netzwerk-Modi. Muss NACH
+		// addNetworkModesToLinks(...) laufen (siehe dortigen Javadoc).
+		behaviourModule.prepareDrtFleets(scenario,
+				PSAV_FLEET_SIZE, PSAV_CAPACITY, PSAV_STOP_COUNT, SSAV_FLEET_SIZE, SSAV_CAPACITY);
 	}
 
 	@Override
 	protected void prepareControler(Controler controler) {
 		controler.addOverridingModule(new behaviourModule());
+
+		// Schritt 8 (SAV-Flotte): aktiviert die von MultiModeDrtModule gebundenen
+		// QSim-Komponenten (Fahrzeuge, Dispatch, Passagier-Handling) fuer PSAV/
+		// SSAV. Guice-Module (behaviourModule.install()) haben keinen Controler-
+		// Zugriff, deshalb hier statt dort.
+		controler.configureQSimComponents(
+				DvrpQSimComponents.activateAllModes(MultiModeDrtConfigGroup.get(controler.getConfig())));
 	}
 }

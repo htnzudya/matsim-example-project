@@ -38,6 +38,143 @@
 		<param name="vehiclesFile" value="https://svn.vsp.tu-berlin.de/repos/public-svn/matsim/scenarios/countries/de/oberlausitz-dresden/oberlausitz-dresden-v2025.0/input/oberlausitz-dresden-v2025.0-vehicle-types.xml"/>
 	</module>
 
+	<!-- ============================================================================
+	     SAV-FLOTTE (Schritt 8, Betriebskonzepte korrigiert in Schritt 9): PSAV
+	     und SSAV als echte DRT-Flotten (matsim-contrib "drt"/"dvrp") statt
+	     reiner Netzwerk-Modi - mit Dispatch, Warteschlangen und Leerfahrten
+	     (Rebalancing). Siehe alternatives.java fuer die Definitionen:
+
+	       PSAV = gepoolt MIT virtuellen Haltestellen (wie MOIA) - mehrere
+	              Fahrgaeste gleichzeitig an Bord, Zu-/Abgang zu Fuss zur
+	              naechsten virtuellen Haltestelle statt Door-to-Door.
+	              -> operationalScheme=stopbased, transitStopFile (siehe unten).
+	       SSAV = Door-to-Door-Robotaxi OHNE Pooling - befoerdert immer nur
+	              einen Kunden/eine Buchung gleichzeitig.
+	              -> operationalScheme=door2door, capacity=1 (in
+	              RunOberlausitzDresdenTest.SSAV_CAPACITY).
+
+	     vehiclesFile/transitStopFile sind hier Platzhalter: behaviourModule.
+	     prepareDrtFleets(...) ueberschreibt sie zur Laufzeit mit aus dem
+	     tatsaechlich geladenen Netzwerk generierten Dateien (siehe
+	     RunOberlausitzDresdenTest - Oberlausitz/Dresden hat keine statischen,
+	     bekannten Link-IDs, das Netz wird je Lauf per HTTPS geladen).
+
+	     Flottengroesse/Kapazitaet/Haltestellenzahl: siehe PSAV_FLEET_SIZE/
+	     SSAV_FLEET_SIZE etc. in RunOberlausitzDresdenTest.java - PLATZHALTER,
+	     nicht aus einer Bedarfsanalyse kalibriert. SSAV braucht (ohne Pooling)
+	     deutlich mehr Fahrzeuge fuer dieselbe Nachfrage als PSAV.
+
+	     maxWaitTime ist bei PSAV hoeher als bei SSAV: PSAV muss erst Fahrgaeste
+	     gemeinsam zur Haltestelle routen/poolen (traegt mehr Wartezeit), SSAV
+	     dispatcht direkt zum Kunden. maxTravelTimeAlpha/-Beta, stopDuration,
+	     Rebalancing-Zonengroesse: PLATZHALTER, uebernommen als plausible
+	     Startwerte aus den offiziellen MATSim-Beispielen (mielec_multiModeEdrt_
+	     config.xml, mielec_stop_based_drt_config.xml).
+
+	     Rebalancing (minCostFlowRebalancingStrategy): DAS ist der Mechanismus,
+	     der die Leerfahrten erzeugt - Fahrzeuge werden proaktiv in Zonen mit
+	     erwarteter Nachfrage vorpositioniert, nicht nur zwischen Absetzen und
+	     naechster Anfrage leer bewegt. -->
+	<module name="dvrp">
+		<!-- networkModes explizit setzen (nicht nur car): noetig, damit
+		     useModeFilteredSubnetwork=true je DRT-Modus (siehe unten) greift -
+		     DVRP baut dann ein kleineres Routing-Netz nur aus Links, die
+		     tatsaechlich psav/ssav erlauben, statt aus dem vollen 441.000-Link-Netz. -->
+		<param name="networkModes" value="car,psav,ssav"/>
+
+		<!-- travelTimeMatrix-Zonengroesse: PLATZHALTER. Oberlausitz/Dresden ist ein
+		     grossflaechiges Metropolregion-Netz (~441.000 Links) - ohne dieses
+		     Parameterset faellt DVRP auf eine viel zu feine Default-Zonierung
+		     zurueck, die Matrix.<init> mit OutOfMemoryError abbrechen laesst
+		     (selbst bei 11g Heap). -->
+		<parameterset type="travelTimeMatrix">
+			<parameterset type="SquareGridZoneSystem">
+				<param name="cellSize" value="6000"/>
+			</parameterset>
+		</parameterset>
+	</module>
+
+	<module name="multiModeDrt">
+
+		<parameterset type="drt">
+			<parameterset type="ExtensiveInsertionSearch"/>
+			<param name="mode" value="psav"/>
+			<param name="stopDuration" value="60"/>
+			<param name="idleVehiclesReturnToDepots" value="true"/>
+			<param name="useModeFilteredSubnetwork" value="true"/>
+			<param name="vehiclesFile" value="PLATZHALTER_wird_zur_Laufzeit_ueberschrieben.xml"/>
+
+			<!-- gepooltes MOIA-artiges System: virtuelle Haltestellen statt
+			     Door-to-Door (siehe alternatives.java). transitStopFile ist ein
+			     Platzhalter, wird von behaviourModule.prepareDrtFleets(...) mit
+			     einer aus dem Netzwerk generierten Haltestellendatei ueberschrieben. -->
+			<param name="operationalScheme" value="stopbased"/>
+			<param name="transitStopFile" value="PLATZHALTER_wird_zur_Laufzeit_ueberschrieben.xml"/>
+
+			<!-- Cache fuer die Fahrzeit-Matrix: wird beim ersten Lauf erzeugt, danach
+			     nur noch von der Platte gelesen statt bei jedem Lauf neu berechnet zu
+			     werden - spart wiederholte Speicherspitzen (siehe Klassen-Kommentar
+			     oben zum OOM-Verlauf). cache/ ist in .gitignore. -->
+			<param name="travelTimeMatrixCachePath" value="cache/psav-ttmatrix.cache"/>
+
+			<parameterset type="drtOptimizationConstraints">
+				<!-- hoeher als SSAV: Pooling/Haltestellen-Routing braucht mehr Zeit -->
+				<param name="maxWaitTime" value="900"/>
+				<param name="maxTravelTimeAlpha" value="1.3"/>
+				<param name="maxTravelTimeBeta" value="600"/>
+				<!-- max. Fussweg zur naechsten virtuellen Haltestelle (stopbased) -->
+				<param name="maxWalkDistance" value="1500.0"/>
+			</parameterset>
+
+			<parameterset type="rebalancing">
+				<parameterset type="minCostFlowRebalancingStrategy">
+					<param name="targetAlpha" value="0.5"/>
+					<param name="targetBeta" value="0.5"/>
+				</parameterset>
+				<parameterset type="SquareGridZoneSystem">
+					<param name="cellSize" value="6000"/>
+				</parameterset>
+			</parameterset>
+		</parameterset>
+
+		<parameterset type="drt">
+			<parameterset type="ExtensiveInsertionSearch"/>
+			<param name="mode" value="ssav"/>
+			<param name="stopDuration" value="60"/>
+			<param name="idleVehiclesReturnToDepots" value="true"/>
+			<param name="useModeFilteredSubnetwork" value="true"/>
+			<param name="vehiclesFile" value="PLATZHALTER_wird_zur_Laufzeit_ueberschrieben.xml"/>
+
+			<!-- Door-to-Door-Robotaxi ohne Pooling (siehe alternatives.java) -
+			     door2door ist zwar DRT-Default, hier explizit gesetzt zur
+			     Dokumentation des Betriebskonzepts. capacity=1 kommt aus der
+			     generierten Flottendatei (RunOberlausitzDresdenTest.SSAV_CAPACITY),
+			     nicht von hier. -->
+			<param name="operationalScheme" value="door2door"/>
+
+			<!-- siehe PSAV-Kommentar oben zu travelTimeMatrixCachePath. -->
+			<param name="travelTimeMatrixCachePath" value="cache/ssav-ttmatrix.cache"/>
+
+			<parameterset type="drtOptimizationConstraints">
+				<!-- niedriger als PSAV: direkter Dispatch ohne Pooling/Haltestellen -->
+				<param name="maxWaitTime" value="600"/>
+				<param name="maxTravelTimeAlpha" value="1.3"/>
+				<param name="maxTravelTimeBeta" value="600"/>
+			</parameterset>
+
+			<parameterset type="rebalancing">
+				<parameterset type="minCostFlowRebalancingStrategy">
+					<param name="targetAlpha" value="0.5"/>
+					<param name="targetBeta" value="0.5"/>
+				</parameterset>
+				<parameterset type="SquareGridZoneSystem">
+					<param name="cellSize" value="6000"/>
+				</parameterset>
+			</parameterset>
+		</parameterset>
+
+	</module>
+
 	<module name="transit">
 		<param name="transitScheduleFile"
 		       value="https://svn.vsp.tu-berlin.de/repos/public-svn/matsim/scenarios/countries/de/oberlausitz-dresden/oberlausitz-dresden-v2025.0/input/oberlausitz-dresden-v2025.0-transitSchedule.xml.gz"/>
@@ -70,6 +207,10 @@
 
 		<param name="vehiclesSource" value="modeVehicleTypesFromVehiclesData"/>
 		<param name="insertingWaitingVehiclesBeforeDrivingVehicles" value="true"/>
+
+		<!-- Schritt 8 (SAV-Flotte): von DRT/DVRP (DynAgents) verlangt - siehe
+		     DynQSimConfigConsistencyChecker. -->
+		<param name="simStarttimeInterpretation" value="onlyUseStarttime"/>
 	</module>
 
 	<module name="replanning">

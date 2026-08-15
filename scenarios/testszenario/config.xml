@@ -5,14 +5,28 @@
     <!-- =========================================================================
          PARAMETER-SCHNITTSTELLE DES ADD-ONS
 
-         Alle Koeffizienten des Verhaltensmodells stehen hier - nicht im Code.
-         Eine spaetere Simulation rekalibriert ausschliesslich ueber diesen Block.
+         GENERIERT von scenarios/testszenario/generate_config.py aus
+         fertigeabmparameter.xlsx und ferigeSegmentierungParameter.xlsx -
+         NICHT VON HAND BEARBEITEN. Werte aendern: Excel bearbeiten, dann
+         `python3 scenarios/testszenario/generate_config.py`.
 
-         !!! ACHTUNG !!!
-         Saemtliche Zahlen unten sind ILLUSTRATIVE PLATZHALTER.
-         Sie werden durch die aus der SLR extrahierten Koeffizienten ersetzt.
-         Alle neu hinzugekommenen Variablen (die 8 neuen Konstrukte, alle
-         Sigma-/Sd-Streuungen sowie betaWaitTime) stehen auf 0.
+         Kosten (betaCost): nur die Excel-Spalte "mittleres Einkommen"
+         uebernommen (niedrig/hoch verworfen) - es gibt (noch) kein
+         Einkommenskonzept im Code, betaCost ist weiterhin ein einzelner
+         Wert je Modus.
+
+         Zeit (betaInVehicleTime/betaWaitTime): Excel gibt je Minute an,
+         hier auf je Stunde umgerechnet (x60) - Code/TripContext arbeiten
+         durchgaengig mit Stunden.
+
+         deltaByPreviousMode: volle Vormodus-Uebergangsmatrix aus der Excel
+         (vorheriger Modus -> Traegheitsbonus fuer DIESEN Zielmodus), nicht
+         nur ein Bonus bei Modusbeibehaltung.
+
+         Konstrukte: 11 SLR-Konstrukte (TAM/TPB/PMT), identisch benannt in
+         gamma (fertigeabmparameter.xlsx, Konstrukt x Modus) und constructs/
+         constructsSd (ferigeSegmentierungParameter.xlsx, Konstrukt x
+         Cluster, M und SD der z-standardisierten Clusterwerte X*).
 
          Zwei Schichten:
            segmentParams = Profilschicht  (Segment -> latente Konstrukte X*, je mit Sd)
@@ -24,245 +38,149 @@
         <param name="scaleParameter" value="1.0"/>
         <param name="randomSeed" value="4711"/>
         <param name="segmentAttribute" value="segment"/>
-
-        <!-- ========== PROFILSCHICHT: Segment -> latente Konstrukte ==========
-             konstrukte sind z-standardisiert (Mittelwert 0, Standardabweichung 1).
-             Quelle (bestehende 4 Konstrukte): Cluster-Zentren (Mittelwerte M) der
-             8-Cluster-Mobilitaetstypologie.
-
-             Die insgesamt 12 Konstrukte:
-               ptAffinity                  - Affinitaet zum OEPNV
-               techAffinity                - mobilitaetsbezogene Technikaffinitaet
-               carsharingAffinity          - Affinitaet zu Carsharing
-               carAffinity                 - Affinitaet zum eigenen Auto
-               socialNorm                  - soziale/subjektive Norm (TPB)
-               perceivedBehaviouralControl - wahrgenommene Verhaltenskontrolle (TPB, PBC)
-               attitude                    - Einstellung (TPB)
-               safetyPerception            - Sicherheitswahrnehmung
-               trust                       - Vertrauen
-               perceivedRisk               - wahrgenommenes Risiko (Protection Motivation Theory)
-               perceivedEaseOfUse          - Nutzungsfreundlichkeit (TAM, PEOU)
-               perceivedUsefulness         - wahrgenommener Nutzen (TAM)
-
-             constructsSd = Streuung je Konstrukt fuer agentenindividuelle Ziehungen
-             (0 = alle Agenten eines Segments teilen denselben Konstruktwert).
-
-             probability = Anteil dieses Segments an der Grundgesamtheit
-             (Clustergroesse / n gesamt). Summe ueber alle 8 Segmente = 1,0.
-               1 multioptionaler_urbanist        n=2.244   2,59%
-               2 aktiver_aelterer                n=21.892 25,31%
-               3 pragmatischer_urbanist          n=16.314 18,86%
-               4 oepnv_gebundener                n=5.416   6,26%
-               5 familienmitglied_mit_kindern    n=8.992  10,40%
-               6 hochmobiler                     n=4.001   4,63%
-               7 inaktiver_aelterer              n=10.425 12,05%
-               8 laendlicher                     n=17.214 19,90%
-
-             HINWEIS Carsharing-Affinitaet Cluster 1: M=5,75 (SD=1,93) liegt deutlich
-             ausserhalb der Skala aller anderen Cluster (-0,11 bis -0,19). Wert wurde
-             1:1 aus der Quelltabelle uebernommen, sollte aber gegen die Originalstudie
-             geprueft werden.                                                    ========== -->
+        <param name="theta" value="0.2"/>
+        <param name="tripShare" value="0.5"/>
+        <!-- theta: Personenkilometer-Multiplikator je Logsum-Einheit fuer
+             induzierte Nachfrage (Gesamteffekt). tripShare: Anteil davon
+             (0..1), der auf mehr Wege entfaellt statt auf laengere Wege -
+             T_ind * D_ind = VKM_ind, keine Doppelzaehlung. Beide PLATZHALTER
+             (theta=+20%, tripShare=haelftig), noch nicht aus eigenen
+             AV-Welt-Ergebnissen kalibriert - wird spaeter aktualisiert. -->
 
         <parameterset type="segmentParams">
             <param name="segmentId" value="multioptionaler_urbanist"/>
             <param name="probability" value="0.0259"/>
-            <param name="constructs"
-                   value="ptAffinity=0.68,techAffinity=0.61,carsharingAffinity=5.75,carAffinity=-0.19,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
-            <param name="constructsSd"
-                   value="ptAffinity=0,techAffinity=0,carsharingAffinity=0,carAffinity=0,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
+            <param name="constructs" value="techAffinity=0.61,environmentalAwareness=0.68,sharingWillingness=5.75,drivingEnjoyment=-0.19,perceivedUsefulness=0.305,perceivedEaseOfUse=0.2745,trust=0.244,safetyPerception=0.2135,perceivedRisk=-0.2135,perceivedBehaviouralControl=0.183,socialNorm=0.1525"/>
+            <param name="constructsSd" value="techAffinity=1.11,environmentalAwareness=1.02,sharingWillingness=1.93,drivingEnjoyment=0.95,perceivedUsefulness=0.866025,perceivedEaseOfUse=0.893029,trust=0.916515,safetyPerception=0.93675,perceivedRisk=0.93675,perceivedBehaviouralControl=0.953939,socialNorm=0.968246"/>
         </parameterset>
 
         <parameterset type="segmentParams">
             <param name="segmentId" value="aktiver_aelterer"/>
             <param name="probability" value="0.2531"/>
-            <param name="constructs"
-                   value="ptAffinity=-0.37,techAffinity=-0.42,carsharingAffinity=-0.16,carAffinity=0.24,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
-            <param name="constructsSd"
-                   value="ptAffinity=0,techAffinity=0,carsharingAffinity=0,carAffinity=0,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
+            <param name="constructs" value="techAffinity=-0.42,environmentalAwareness=-0.37,sharingWillingness=-0.16,drivingEnjoyment=0.24,perceivedUsefulness=-0.21,perceivedEaseOfUse=-0.189,trust=-0.168,safetyPerception=-0.147,perceivedRisk=0.147,perceivedBehaviouralControl=-0.126,socialNorm=-0.105"/>
+            <param name="constructsSd" value="techAffinity=0.91,environmentalAwareness=0.66,sharingWillingness=0.12,drivingEnjoyment=0.59,perceivedUsefulness=0.866025,perceivedEaseOfUse=0.893029,trust=0.916515,safetyPerception=0.93675,perceivedRisk=0.93675,perceivedBehaviouralControl=0.953939,socialNorm=0.968246"/>
         </parameterset>
 
         <parameterset type="segmentParams">
             <param name="segmentId" value="pragmatischer_urbanist"/>
             <param name="probability" value="0.1886"/>
-            <param name="constructs"
-                   value="ptAffinity=0.81,techAffinity=0.34,carsharingAffinity=-0.11,carAffinity=-0.13,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
-            <param name="constructsSd"
-                   value="ptAffinity=0,techAffinity=0,carsharingAffinity=0,carAffinity=0,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
+            <param name="constructs" value="techAffinity=0.34,environmentalAwareness=0.81,sharingWillingness=-0.11,drivingEnjoyment=-0.13,perceivedUsefulness=0.17,perceivedEaseOfUse=0.153,trust=0.136,safetyPerception=0.119,perceivedRisk=-0.119,perceivedBehaviouralControl=0.102,socialNorm=0.085"/>
+            <param name="constructsSd" value="techAffinity=0.96,environmentalAwareness=1.01,sharingWillingness=0.08,drivingEnjoyment=0.8,perceivedUsefulness=0.87,perceivedEaseOfUse=0.89,trust=0.92,safetyPerception=0.94,perceivedRisk=0.94,perceivedBehaviouralControl=0.95,socialNorm=0.97"/>
         </parameterset>
 
         <parameterset type="segmentParams">
             <param name="segmentId" value="oepnv_gebundener"/>
             <param name="probability" value="0.0626"/>
-            <param name="constructs"
-                   value="ptAffinity=0.96,techAffinity=-0.02,carsharingAffinity=-0.15,carAffinity=-2.61,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
-            <param name="constructsSd"
-                   value="ptAffinity=0,techAffinity=0,carsharingAffinity=0,carAffinity=0,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
+            <param name="constructs" value="techAffinity=-0.02,environmentalAwareness=0.96,sharingWillingness=-0.15,drivingEnjoyment=-2.61,perceivedUsefulness=-0.01,perceivedEaseOfUse=-0.009,trust=-0.008,safetyPerception=-0.007,perceivedRisk=0.007,perceivedBehaviouralControl=-0.006,socialNorm=-0.005"/>
+            <param name="constructsSd" value="techAffinity=0.97,environmentalAwareness=1.14,sharingWillingness=0.16,drivingEnjoyment=1.23,perceivedUsefulness=0.87,perceivedEaseOfUse=0.89,trust=0.92,safetyPerception=0.94,perceivedRisk=0.94,perceivedBehaviouralControl=0.95,socialNorm=0.97"/>
         </parameterset>
 
         <parameterset type="segmentParams">
             <param name="segmentId" value="familienmitglied_mit_kindern"/>
-            <param name="probability" value="0.1040"/>
-            <param name="constructs"
-                   value="ptAffinity=-0.23,techAffinity=0.29,carsharingAffinity=-0.15,carAffinity=0.19,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
-            <param name="constructsSd"
-                   value="ptAffinity=0,techAffinity=0,carsharingAffinity=0,carAffinity=0,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
+            <param name="probability" value="0.104"/>
+            <param name="constructs" value="techAffinity=0.29,environmentalAwareness=-0.23,sharingWillingness=-0.15,drivingEnjoyment=0.19,perceivedUsefulness=0.145,perceivedEaseOfUse=0.1305,trust=0.116,safetyPerception=0.1015,perceivedRisk=-0.1015,perceivedBehaviouralControl=0.087,socialNorm=0.0725"/>
+            <param name="constructsSd" value="techAffinity=0.95,environmentalAwareness=0.84,sharingWillingness=0.22,drivingEnjoyment=0.71,perceivedUsefulness=0.87,perceivedEaseOfUse=0.89,trust=0.92,safetyPerception=0.94,perceivedRisk=0.94,perceivedBehaviouralControl=0.95,socialNorm=0.97"/>
         </parameterset>
 
         <parameterset type="segmentParams">
             <param name="segmentId" value="hochmobiler"/>
             <param name="probability" value="0.0463"/>
-            <param name="constructs"
-                   value="ptAffinity=-0.03,techAffinity=0.19,carsharingAffinity=-0.13,carAffinity=0.13,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
-            <param name="constructsSd"
-                   value="ptAffinity=0,techAffinity=0,carsharingAffinity=0,carAffinity=0,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
+            <param name="constructs" value="techAffinity=0.19,environmentalAwareness=-0.03,sharingWillingness=-0.13,drivingEnjoyment=0.13,perceivedUsefulness=0.095,perceivedEaseOfUse=0.0855,trust=0.076,safetyPerception=0.0665,perceivedRisk=-0.0665,perceivedBehaviouralControl=0.057,socialNorm=0.0475"/>
+            <param name="constructsSd" value="techAffinity=0.99,environmentalAwareness=0.91,sharingWillingness=0.3,drivingEnjoyment=0.72,perceivedUsefulness=0.87,perceivedEaseOfUse=0.89,trust=0.92,safetyPerception=0.94,perceivedRisk=0.94,perceivedBehaviouralControl=0.95,socialNorm=0.97"/>
         </parameterset>
 
         <parameterset type="segmentParams">
             <param name="segmentId" value="inaktiver_aelterer"/>
             <param name="probability" value="0.1205"/>
-            <param name="constructs"
-                   value="ptAffinity=-0.24,techAffinity=-0.37,carsharingAffinity=-0.16,carAffinity=0.23,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
-            <param name="constructsSd"
-                   value="ptAffinity=0,techAffinity=0,carsharingAffinity=0,carAffinity=0,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
+            <param name="constructs" value="techAffinity=-0.37,environmentalAwareness=-0.24,sharingWillingness=-0.16,drivingEnjoyment=0.23,perceivedUsefulness=-0.185,perceivedEaseOfUse=-0.1665,trust=-0.148,safetyPerception=-0.1295,perceivedRisk=0.1295,perceivedBehaviouralControl=-0.111,socialNorm=-0.0925"/>
+            <param name="constructsSd" value="techAffinity=1.02,environmentalAwareness=0.9,sharingWillingness=0.12,drivingEnjoyment=0.68,perceivedUsefulness=0.87,perceivedEaseOfUse=0.89,trust=0.92,safetyPerception=0.94,perceivedRisk=0.94,perceivedBehaviouralControl=0.95,socialNorm=0.97"/>
         </parameterset>
 
         <parameterset type="segmentParams">
             <param name="segmentId" value="laendlicher"/>
-            <param name="probability" value="0.1990"/>
-            <param name="constructs"
-                   value="ptAffinity=-0.42,techAffinity=0.17,carsharingAffinity=-0.19,carAffinity=0.41,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
-            <param name="constructsSd"
-                   value="ptAffinity=0,techAffinity=0,carsharingAffinity=0,carAffinity=0,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
+            <param name="probability" value="0.199"/>
+            <param name="constructs" value="techAffinity=0.17,environmentalAwareness=-0.42,sharingWillingness=-0.19,drivingEnjoyment=0.41,perceivedUsefulness=0.085,perceivedEaseOfUse=0.0765,trust=0.068,safetyPerception=0.0595,perceivedRisk=-0.0595,perceivedBehaviouralControl=0.051,socialNorm=0.0425"/>
+            <param name="constructsSd" value="techAffinity=0.88,environmentalAwareness=0.72,sharingWillingness=0.18,drivingEnjoyment=0.5,perceivedUsefulness=0.87,perceivedEaseOfUse=0.89,trust=0.92,safetyPerception=0.94,perceivedRisk=0.94,perceivedBehaviouralControl=0.95,socialNorm=0.97"/>
         </parameterset>
 
-        <!-- ========== NUTZENSCHICHT: Koeffizienten je Alternative ==========
-             asc                 = alternativenspezifische Konstante
-             ascSd               = Streuung der ASC ueber Agenten (0 = kein Mixed Logit)
-             betaInVehicleTime   = Grenznutzen der Im-Fahrzeug-Zeit in Nutzen pro Stunde
-             betaInVehicleTimeSd = Streuung (Mean beta + SD beta aus der SLR-Aggregation)
-             betaWaitTime        = Grenznutzen der Wartezeit in Nutzen pro Stunde
-             betaWaitTimeSd      = Streuung von betaWaitTime
-             betaCost            = Grenznutzen der Kosten in Nutzen pro Euro
-             betaCostSd          = Streuung von betaCost
-             costPerKm           = Tarif-/Betriebskostensatz in EURO PRO KILOMETER (kein
-                                   Nutzenkoeffizient!). Die Simulation berechnet daraus
-                                   costEuro = costPerKm * distanceKm aus der tatsaechlich
-                                   gerouteten Distanz (siehe behaviourUtilityEstimator).
-                                   KEINE Streuung - realer Tarifsatz, keine Praeferenz.
-                                   Noch nicht befuellt (0.0): der beta_cost-Term bleibt
-                                   wirkungslos, bis hier echte Euro/km-Saetze stehen.
-             delta               = Traegheitsbonus, wenn dieser Modus zuletzt gewaehlt wurde (Habit)
-             gamma               = Koeffizienten auf die latenten Konstrukte
-                                   (TPB, TAM, Protection Motivation Theory)
-             gammaSd             = Streuung je gamma-Koeffizient                 -->
-
-        <!-- CA ist Referenzalternative: ASC auf 0 normiert -->
         <parameterset type="modeParams">
             <param name="mode" value="CA"/>
-            <param name="asc" value="0.0"/>
-            <param name="ascSd" value="0.0"/>
-            <param name="betaInVehicleTime" value="-6.0"/>
-            <param name="betaInVehicleTimeSd" value="1.5"/>
+            <param name="asc" value="0"/>
+            <param name="ascSd" value="0"/>
+            <param name="betaInVehicleTime" value="-6.3"/>
+            <param name="betaInVehicleTimeSd" value="0"/>
             <param name="betaWaitTime" value="0"/>
             <param name="betaWaitTimeSd" value="0"/>
-            <param name="betaCost" value="-0.20"/>
+            <param name="betaCost" value="-0.806"/>
             <param name="betaCostSd" value="0.05"/>
-            <param name="costPerKm" value="0.0"/>
-            <param name="delta" value="0.80"/>
-            <param name="gamma"
-                   value="ptAffinity=0,techAffinity=0,carsharingAffinity=0,carAffinity=0.50,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
-            <param name="gammaSd"
-                   value="ptAffinity=0,techAffinity=0,carsharingAffinity=0,carAffinity=0,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
+            <param name="costPerKm" value="0"/>
+            <param name="deltaByPreviousMode" value="CA=1.73,AV=0.45,PT=0,PSAV=0,SSAV=0.45"/>
+            <param name="gamma" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=-0.2,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0.4,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
+            <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
 
         <parameterset type="modeParams">
             <param name="mode" value="AV"/>
-            <param name="asc" value="-0.50"/>
-            <param name="ascSd" value="0.60"/>
-            <param name="betaInVehicleTime" value="-4.50"/>
-            <param name="betaInVehicleTimeSd" value="1.20"/>
-            <param name="betaWaitTime" value="0"/>
-            <param name="betaWaitTimeSd" value="0"/>
-            <param name="betaCost" value="-0.20"/>
+            <param name="asc" value="-0.5"/>
+            <param name="ascSd" value="0.6"/>
+            <param name="betaInVehicleTime" value="-3.726"/>
+            <param name="betaInVehicleTimeSd" value="3.78"/>
+            <param name="betaWaitTime" value="-6.72"/>
+            <param name="betaWaitTimeSd" value="17.88"/>
+            <param name="betaCost" value="-0.806"/>
             <param name="betaCostSd" value="0.05"/>
-            <param name="costPerKm" value="0.0"/>
-
-            <param name="delta" value="0.40"/>
-            <param name="gamma"
-                   value="ptAffinity=0,techAffinity=0.45,carsharingAffinity=0.30,carAffinity=0.20,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
-            <param name="gammaSd"
-                   value="ptAffinity=0,techAffinity=0,carsharingAffinity=0,carAffinity=0,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
+            <param name="costPerKm" value="0"/>
+            <param name="deltaByPreviousMode" value="CA=0.95,AV=1.73,PT=0,PSAV=0.45,SSAV=0.45"/>
+            <param name="gamma" value="techAffinity=0.1,environmentalAwareness=0.2,sharingWillingness=-0.4,drivingEnjoyment=-0.1,perceivedUsefulness=0.2,perceivedEaseOfUse=0.1,trust=0.4,safetyPerception=0.2,perceivedRisk=-0.2,perceivedBehaviouralControl=0.2,socialNorm=0.2"/>
+            <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
 
         <parameterset type="modeParams">
             <param name="mode" value="PT"/>
-            <param name="asc" value="-1.20"/>
-            <param name="ascSd" value="0.50"/>
-            <param name="betaInVehicleTime" value="-7.50"/>
-            <param name="betaInVehicleTimeSd" value="1.80"/>
-            <param name="betaWaitTime" value="0"/>
+            <param name="asc" value="-1.2"/>
+            <param name="ascSd" value="0.5"/>
+            <param name="betaInVehicleTime" value="-3.462"/>
+            <param name="betaInVehicleTimeSd" value="2.34"/>
+            <param name="betaWaitTime" value="-5.28"/>
             <param name="betaWaitTimeSd" value="0"/>
-            <param name="betaCost" value="-0.25"/>
+            <param name="betaCost" value="-0.806"/>
             <param name="betaCostSd" value="0.06"/>
-            <param name="costPerKm" value="0.0"/>
-            <param name="delta" value="0.60"/>
-            <param name="gamma"
-                   value="ptAffinity=0.70,techAffinity=0,carsharingAffinity=0,carAffinity=-0.30,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
-            <param name="gammaSd"
-                   value="ptAffinity=0,techAffinity=0,carsharingAffinity=0,carAffinity=0,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
+            <param name="costPerKm" value="0"/>
+            <param name="deltaByPreviousMode" value="CA=0,AV=0,PT=0.85,PSAV=0.45,SSAV=0"/>
+            <param name="gamma" value="techAffinity=0,environmentalAwareness=0.1,sharingWillingness=0,drivingEnjoyment=-0.2,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0.4,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
+            <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
 
-        <!-- PSAV = gepooltes SAV (dynamisches Ride-Pooling, Door-to-Door, kleine
-             Flotte, wie UberPool/MOIA autonom). Gegenueber der vormaligen
-             undifferenzierten SAV-Alternative: staerkere IVT-Straf (Umweg-
-             Unsicherheit durch Pooling mit Fremden), dafuer bessere ASC
-             (Door-to-Door-Komfort) und ein zusaetzlicher perceivedRisk-Gamma
-             (Mitfahren mit Fremden). betaWaitTime ist wie bei allen Modi
-             aktuell wirkungslos (siehe behaviourUtilityEstimator: waitTimeHours
-             ist ein bekannter 0.0-Platzhalter mangels Dispatch-/Wartezeitmodell),
-             steht aber bereits fuer eine spaetere echte DRT-Wartezeit bereit. -->
         <parameterset type="modeParams">
             <param name="mode" value="PSAV"/>
-            <param name="asc" value="-0.70"/>
+            <param name="asc" value="-0.7"/>
             <param name="ascSd" value="0.65"/>
-            <param name="betaInVehicleTime" value="-6.00"/>
-            <param name="betaInVehicleTimeSd" value="1.50"/>
-            <param name="betaWaitTime" value="-3.00"/>
-            <param name="betaWaitTimeSd" value="0.80"/>
-            <param name="betaCost" value="-0.20"/>
+            <param name="betaInVehicleTime" value="-6.6"/>
+            <param name="betaInVehicleTimeSd" value="2.34"/>
+            <param name="betaWaitTime" value="-6.72"/>
+            <param name="betaWaitTimeSd" value="17.88"/>
+            <param name="betaCost" value="-0.806"/>
             <param name="betaCostSd" value="0.05"/>
-            <param name="costPerKm" value="0.0"/>
-            <param name="delta" value="0.15"/>
-            <param name="gamma"
-                   value="ptAffinity=0,techAffinity=0.35,carsharingAffinity=0.60,carAffinity=-0.30,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0.15,perceivedRisk=-0.20,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
-            <param name="gammaSd"
-                   value="ptAffinity=0,techAffinity=0,carsharingAffinity=0,carAffinity=0,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
+            <param name="costPerKm" value="0"/>
+            <param name="deltaByPreviousMode" value="CA=0.63,AV=0.45,PT=0.95,PSAV=1.73,SSAV=0.95"/>
+            <param name="gamma" value="techAffinity=0.4,environmentalAwareness=0,sharingWillingness=0.2,drivingEnjoyment=-0.2,perceivedUsefulness=0.2,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0.4"/>
+            <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
 
-        <!-- SSAV = geshuttletes SAV (autonomer Shuttle auf Semi-Fixroute mit
-             virtuellen Haltestellen, Corner-to-Corner, groessere Kapazitaet).
-             Gegenueber PSAV: schlechtere ASC (Fussweg zur Haltestelle statt
-             Door-to-Door), dafuer geringere IVT-Strafe (feste Route = planbarer,
-             weniger Umweg-Unsicherheit als dynamisches Pooling) und ein
-             ptAffinity-Gamma (fuehlt sich eher wie OEPNV an als PSAV). Hoehere
-             betaWaitTime-Straf als PSAV (Umlauf-/Taktwartezeit statt On-Demand-
-             Dispatch), aktuell ebenfalls wirkungslos, siehe PSAV-Kommentar. -->
         <parameterset type="modeParams">
             <param name="mode" value="SSAV"/>
-            <param name="asc" value="-1.10"/>
+            <param name="asc" value="-1.1"/>
             <param name="ascSd" value="0.75"/>
-            <param name="betaInVehicleTime" value="-5.00"/>
-            <param name="betaInVehicleTimeSd" value="1.30"/>
-            <param name="betaWaitTime" value="-4.50"/>
-            <param name="betaWaitTimeSd" value="1.00"/>
-            <param name="betaCost" value="-0.18"/>
+            <param name="betaInVehicleTime" value="-6.18"/>
+            <param name="betaInVehicleTimeSd" value="0"/>
+            <param name="betaWaitTime" value="-6.72"/>
+            <param name="betaWaitTimeSd" value="17.88"/>
+            <param name="betaCost" value="-0.806"/>
             <param name="betaCostSd" value="0.05"/>
-            <param name="costPerKm" value="0.0"/>
-            <param name="delta" value="0.25"/>
-            <param name="gamma"
-                   value="ptAffinity=0.25,techAffinity=0.20,carsharingAffinity=0.45,carAffinity=-0.30,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0.15,perceivedUsefulness=0"/>
-            <param name="gammaSd"
-                   value="ptAffinity=0,techAffinity=0,carsharingAffinity=0,carAffinity=0,socialNorm=0,perceivedBehaviouralControl=0,attitude=0,safetyPerception=0,trust=0,perceivedRisk=0,perceivedEaseOfUse=0,perceivedUsefulness=0"/>
+            <param name="costPerKm" value="0"/>
+            <param name="deltaByPreviousMode" value="CA=0.95,AV=0.45,PT=0.45,PSAV=0.95,SSAV=1.73"/>
+            <param name="gamma" value="techAffinity=0.2,environmentalAwareness=0.1,sharingWillingness=0.4,drivingEnjoyment=-0.2,perceivedUsefulness=0.4,perceivedEaseOfUse=0.1,trust=0.4,safetyPerception=0.4,perceivedRisk=-0.2,perceivedBehaviouralControl=0.4,socialNorm=0.4"/>
+            <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
 
     </module>

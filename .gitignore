@@ -21,6 +21,9 @@ hs_err_pid*
 /test/output/
 /bin/
 
+# DRT travelTimeMatrixCachePath (generated binary cache, see oberlausitz-dresden/config.xml)
+cache/
+
 # IntelliJ
 /.idea/
 *.iml

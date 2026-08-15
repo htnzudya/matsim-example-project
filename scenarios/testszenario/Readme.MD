@@ -69,20 +69,30 @@ Dieselbe Nutzenfunktion, unterschiedliche Segmente → unterschiedliche Moduswah
 
 ---
 
-## ⚠️ Alle Zahlen sind Platzhalter
+## Koeffizienten aus der Excel — `config.xml` wird generiert
 
-Sämtliche Werte in `Demo.java` und in der XML sind **illustrative Platzhalter**, keine SLR-Koeffizienten. Sie zeigen nur, an welcher Stelle die extrahierten Werte eingetragen werden.
+Die echten, aus der SLR extrahierten Koeffizienten stehen in `fertigeabmparameter.xlsx` (Nutzenschicht: gamma je Modus/Konstrukt, beta, delta) und `ferigeSegmentierungParameter.xlsx` (Profilschicht: X* je Segment/Konstrukt, aus der 8-Cluster-Mobilitätstypologie-Studie). Der `<module name="verhaltensmodell">`-Block in `config.xml` wird aus beiden **automatisch generiert** — nicht von Hand pflegen:
+
+```
+1. Excel bearbeiten (fertigeabmparameter.xlsx und/oder ferigeSegmentierungParameter.xlsx).
+2. python3 scenarios/testszenario/generate_config.py
+3. Diff von config.xml prüfen, committen.
+```
+
+Details zur Umrechnung (z. B. Minute→Stunde) und dazu, welche Werte NICHT aus einer Excel kommen (ASC, ascSd, costPerKm, betaCostSd), stehen im Kommentarkopf des generierten `<module name="verhaltensmodell">`-Blocks selbst sowie im Kopf von `generate_config.py`.
+
+Bewusste Vereinfachung: Die Excel unterscheidet `beta_Kosten` nach Einkommensklasse (niedrig/mittel/hoch); übernommen wird aktuell nur **mittleres Einkommen**, einheitlich für alle Modi — es gibt (noch) kein Einkommenskonzept im Code.
+
+Beide Excel-Dateien sind auf denselben Satz von 11 SLR-Konstrukten (TAM/TPB/PMT) abgestimmt — `constructs`/`constructsSd` (Segmentierungstabelle) und `gamma` (ABM-Parameter) verwenden identische Schlüssel. Frühere Platzhalterkonstrukte (`ptAffinity`, `carsharingAffinity`, `carAffinity`, `attitude`) sind entfallen: es waren fehlbenannte Frühfassungen von vier der 11 finalen Konstrukte, keine eigenständigen Größen.
 
 ---
 
 ## Nächste Schritte
 
 1. **JDK 21** in IntelliJ einstellen, `pom.xml` auf `release 21`.
-2. Dateien ins Projekt kopieren (Paketstruktur beibehalten).
-3. `UtilityFunctionTest` laufen lassen → muss 8/8 grün sein.
-4. **Koeffizienten eintragen** — aus der SLR-Extraktionstabelle (Spalte „Modellrolle"). Das ist der eigentliche inhaltliche Kern.
-5. MATSim-Anbindung: `ScoringFunctionFactory` oder `informed-mode-choice`-Estimator — gegen die 2026.0-API verifizieren.
-6. Mini-Testszenario, das `addOverridingModule(new VerhaltensModule())` aufruft.
+2. `UtilityFunctionTest` laufen lassen → muss 8/8 grün sein.
+3. MATSim-Anbindung: `ScoringFunctionFactory` oder `informed-mode-choice`-Estimator — gegen die 2026.0-API verifizieren.
+4. Mini-Testszenario, das `addOverridingModule(new VerhaltensModule())` aufruft.
 
 ---
 

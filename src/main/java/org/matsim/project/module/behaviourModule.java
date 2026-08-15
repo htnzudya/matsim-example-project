@@ -1,9 +1,14 @@
 package org.matsim.project.module;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.matsim.api.core.v01.Id;
@@ -15,7 +20,16 @@ import org.matsim.contribs.discrete_mode_choice.modules.DiscreteModeChoiceModule
 import org.matsim.contribs.discrete_mode_choice.modules.EstimatorModule;
 import org.matsim.contribs.discrete_mode_choice.modules.SelectorModule;
 import org.matsim.contribs.discrete_mode_choice.modules.config.DiscreteModeChoiceConfigGroup;
+import org.matsim.contrib.drt.routing.DrtRoute;
+import org.matsim.contrib.drt.routing.DrtRouteFactory;
+import org.matsim.contrib.drt.run.DrtConfigGroup;
+import org.matsim.contrib.drt.run.DrtConfigs;
+import org.matsim.contrib.drt.run.MultiModeDrtConfigGroup;
+import org.matsim.contrib.drt.run.MultiModeDrtModule;
+import org.matsim.contrib.dvrp.run.DvrpConfigGroup;
+import org.matsim.contrib.dvrp.run.DvrpModule;
 import org.matsim.core.config.Config;
+import org.matsim.core.config.ConfigGroup;
 import org.matsim.core.config.groups.RoutingConfigGroup;
 import org.matsim.core.config.groups.ScoringConfigGroup;
 import org.matsim.core.controler.AbstractModule;
@@ -125,40 +139,53 @@ public final class behaviourModule extends AbstractModule {
         // aus alternatives.java, nicht aus einer XML-Modusliste.
         dmcConfig.setModeAvailability(behaviourDiscreteModeChoiceExtension.MODE_AVAILABILITY_NAME);
 
-        // Schritt 7 (Netzwerkrouting): AV/SAV nutzen dasselbe Strassennetz wie CA und
-        // erleben dieselbe Stau-Dynamik, statt teleportiert zu werden. Dazu reicht es,
-        // sie zu routing().networkModes und qsim().mainModes hinzuzufuegen - MATSims
+        // Schritt 7 (Netzwerkrouting): AV nutzt dasselbe Strassennetz wie CA und
+        // erlebt dieselbe Stau-Dynamik, statt teleportiert zu werden. Dazu reicht es,
+        // es zu routing().networkModes und qsim().mainModes hinzuzufuegen - MATSims
         // eigene TravelTimeCalculatorModule/TravelDisutilityModule iterieren beide
         // automatisch ueber routing().getNetworkModes() und binden pro Modus TravelTime/
         // TravelDisutility (FreeSpeedTravelTime, falls der Modus nicht zusaetzlich in
         // travelTimeCalculator().analyzedModes steht - siehe unten). Kein eigenes
-        // Guice-Binding noetig. Die Netzlinks selbst muessen AV/SAV zusaetzlich zu CA
+        // Guice-Binding noetig. Die Netzlinks selbst muessen AV zusaetzlich zu CA
         // erlauben - das passiert nicht hier (kein Network in der Config-Phase
         // verfuegbar), sondern in addNetworkModesToLinks(scenario.getNetwork()), vom
         // Aufrufer aus prepareScenario(...) heraus.
+        //
+        // PSAV/SSAV NICHT hier: seit Schritt 8 sind das echte DRT-Flotten
+        // (matsim-contrib "drt"), keine einfachen Netzwerk-Modi mehr - sie
+        // bekommen ihr eigenes Routing/QSim-Handling ueber MultiModeDrtModule
+        // (siehe unten und prepareDrtFleets). Waeren sie ZUSAETZLICH hier drin,
+        // wuerde MATSims generisches NetworkRouting mit dem DRT-eigenen Routing
+        // um denselben Modusnamen konkurrieren.
         RoutingConfigGroup routingConfig = config.routing();
         Set<String> networkModes = new LinkedHashSet<>(routingConfig.getNetworkModes());
         networkModes.add(alternatives.AV.getMatsimMode());
-        networkModes.add(alternatives.PSAV.getMatsimMode());
-        networkModes.add(alternatives.SSAV.getMatsimMode());
         routingConfig.setNetworkModes(networkModes);
 
         Set<String> mainModes = new LinkedHashSet<>(config.qsim().getMainModes());
         mainModes.add(alternatives.AV.getMatsimMode());
-        mainModes.add(alternatives.PSAV.getMatsimMode());
-        mainModes.add(alternatives.SSAV.getMatsimMode());
         config.qsim().setMainModes(mainModes);
 
-        // AV/PSAV/SSAV auch bei der Reisezeitmessung mitzaehlen, damit sie ihre EIGENE
-        // beobachtete (kongestionsabhaengige) Reisezeit fuers Routing bekommen, statt
+        // AV auch bei der Reisezeitmessung mitzaehlen, damit es seine EIGENE
+        // beobachtete (kongestionsabhaengige) Reisezeit fuers Routing bekommt, statt
         // stillschweigend auf FreeSpeedTravelTime zurueckzufallen (siehe
         // TravelTimeCalculatorModule: nur Modi in analyzedModes bekommen einen echten
         // TravelTimeCalculator).
         Set<String> analyzedModes = new LinkedHashSet<>(config.travelTimeCalculator().getAnalyzedModes());
         analyzedModes.add(alternatives.AV.getMatsimMode());
-        analyzedModes.add(alternatives.PSAV.getMatsimMode());
-        analyzedModes.add(alternatives.SSAV.getMatsimMode());
         config.travelTimeCalculator().setAnalyzedModes(analyzedModes);
+
+        // Schritt 8 (SAV-Flotte): PSAV/SSAV als echte DRT-Flotten mit Dispatch,
+        // Warteschlangen und Leerfahrten (Rebalancing) statt reiner Netzwerk-Modi.
+        // multiModeDrt/dvrp kommen aus der Szenario-Config (siehe
+        // oberlausitz-dresden/config.xml) - hier nur materialisieren (siehe
+        // behaviourConfigGroup.getOrCreate-Javadoc fuer denselben Mechanismus bei
+        // generischen vs. typisierten ConfigGroups) und die DRT-Interaktions-
+        // Scoringparameter (Boarding-/Alighting-Pseudoaktivitaet) ergaenzen.
+        getOrCreateTyped(config, DvrpConfigGroup.GROUP_NAME, DvrpConfigGroup.class, DvrpConfigGroup::new);
+        MultiModeDrtConfigGroup multiModeDrtConfig = getOrCreateTyped(
+                config, MultiModeDrtConfigGroup.GROUP_NAME, MultiModeDrtConfigGroup.class, MultiModeDrtConfigGroup::new);
+        DrtConfigs.adjustMultiModeDrtConfig(multiModeDrtConfig, config.scoring(), config.routing());
 
         // MATSims eigene (von unserer behaviourUtilityFunction unabhaengige) Kern-
         // Scoringfunktion registriert beim Start automatisch ModeParams-Defaults fuer
@@ -222,6 +249,100 @@ public final class behaviourModule extends AbstractModule {
         }
     }
 
+    /**
+     * Flotten-seitiger Teil der Einbindung fuer Schritt 8 (SAV-Flotte). Muss aus
+     * prepareScenario(...) aufgerufen werden, NACH addNetworkModesToLinks(...)
+     * (die Flotte braucht Links, die PSAV/SSAV bereits erlauben) und nachdem
+     * configureController(config) bereits in prepareConfig(...) lief (die
+     * multiModeDrt-Config muss materialisiert sein, siehe getOrCreateTyped).
+     *
+     * Erzeugt fuer PSAV und SSAV je eine DRT-Flottendatei aus dem tatsaechlich
+     * geladenen Netzwerk (siehe behaviourDrtFleetGenerator-Javadoc: Oberlausitz/
+     * Dresden hat keine statischen, bekannten Link-IDs) und traegt deren Pfad in
+     * die jeweilige DrtConfigGroup ein - der vehiclesFile-Wert aus der XML ist
+     * nur ein Platzhalter, der hier ueberschrieben wird. Registriert ausserdem
+     * die DrtRouteFactory, die zur (De-)Serialisierung von PSAV/SSAV-Routen
+     * gebraucht wird.
+     *
+     * Die generierte Flottendatei landet in einem TEMP-Verzeichnis, bewusst
+     * NICHT im konfigurierten Output-Verzeichnis: dessen Aufraeumen
+     * (overwriteFiles=deleteDirectoryIfExists) laeuft im Controler-Lifecycle
+     * later als dieser Aufruf, wuerde die Datei also wieder loeschen, bevor
+     * FleetModule sie liest.
+     *
+     * fleetSize/capacity je Modus sind PLATZHALTER (nicht aus einer echten
+     * Bedarfsanalyse kalibriert) - der Aufrufer uebergibt sie explizit, damit
+     * behaviourModule selbst szenario-unabhaengig bleibt (siehe Klassen-Javadoc).
+     *
+     * psavStopCount (Schritt 9): PSAV ist ein gepooltes, MOIA-artiges System MIT
+     * virtuellen Haltestellen (operationalScheme=stopbased in der Config) - im
+     * Unterschied zu SSAV (Door-to-Door-Robotaxi ohne Pooling, capacity=1 vom
+     * Aufrufer zu setzen). Erzeugt genau wie die Flotte eine PLATZHALTER-Datei
+     * aus dem tatsaechlich geladenen Netzwerk (siehe behaviourDrtStopGenerator).
+     */
+    public static void prepareDrtFleets(Scenario scenario,
+                                         int psavFleetSize, int psavCapacity, int psavStopCount,
+                                         int ssavFleetSize, int ssavCapacity) {
+
+        scenario.getPopulation().getFactory().getRouteFactories()
+                .setRouteFactory(DrtRoute.class, new DrtRouteFactory());
+
+        Config config = scenario.getConfig();
+        MultiModeDrtConfigGroup multiModeDrtConfig = MultiModeDrtConfigGroup.get(config);
+        long randomSeed = behaviourConfigGroup.getOrCreate(config).getRandomSeed();
+
+        Path drtDir;
+        try {
+            drtDir = Files.createTempDirectory("behaviourModule-drt-fleets");
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+
+        for (DrtConfigGroup drtConfig : multiModeDrtConfig.getModalElements()) {
+            int fleetSize;
+            int capacity;
+            if (alternatives.PSAV.getMatsimMode().equals(drtConfig.getMode())) {
+                fleetSize = psavFleetSize;
+                capacity = psavCapacity;
+
+                Path stopsFile = drtDir.resolve(drtConfig.getMode() + "-stops.xml");
+                behaviourDrtStopGenerator.writeStops(scenario.getNetwork(), drtConfig.getMode(), psavStopCount,
+                        randomSeed, stopsFile);
+                drtConfig.setTransitStopFile(stopsFile.toUri().toString());
+            } else if (alternatives.SSAV.getMatsimMode().equals(drtConfig.getMode())) {
+                fleetSize = ssavFleetSize;
+                capacity = ssavCapacity;
+            } else {
+                continue;
+            }
+
+            Path fleetFile = drtDir.resolve(drtConfig.getMode() + "-fleet.xml");
+            behaviourDrtFleetGenerator.writeFleet(scenario.getNetwork(), drtConfig.getMode(), fleetSize, capacity,
+                    0.0, 30 * 3600.0, randomSeed, fleetFile);
+            drtConfig.setVehiclesFile(fleetFile.toUri().toString());
+        }
+    }
+
+    /**
+     * Generische Variante von behaviourConfigGroup.getOrCreate(...) fuer fremde
+     * ConfigGroup-Klassen (MultiModeDrtConfigGroup/DvrpConfigGroup), deren
+     * eigene statische get(config)-Methoden KEINE Materialisierung vornehmen -
+     * ein direkter Cast, der eine ClassCastException wirft, wenn das Modul noch
+     * generisch/ungetypt vorliegt (siehe behaviourConfigGroup.getOrCreate-Javadoc
+     * fuer denselben MATSim-Mechanismus: config.addModule(...) kopiert alle
+     * Params/Parametersets aus der generischen in die typisierte Instanz).
+     */
+    private static <T extends ConfigGroup> T getOrCreateTyped(
+            Config config, String groupName, Class<T> type, Supplier<T> factory) {
+        ConfigGroup existing = config.getModules().get(groupName);
+        if (type.isInstance(existing)) {
+            return type.cast(existing);
+        }
+        T group = factory.get();
+        config.addModule(group);
+        return group;
+    }
+
     @Override
     public void install() {
 
@@ -250,5 +371,17 @@ public final class behaviourModule extends AbstractModule {
         // Eigenen TripEstimator ("verhalten") registrieren, der behaviourUtilityFunction
         // nutzt - siehe configureController(...) fuer die zugehoerige Config-Aktivierung.
         install(new behaviourDiscreteModeChoiceExtension());
+
+        // Schritt 8 (SAV-Flotte): DVRP/DRT-Contrib fuer PSAV/SSAV als echte
+        // Flotten mit Dispatch, Warteschlangen und Leerfahrten. Bindet u. a.
+        // FleetSpecification/DrtOptimizer/PassengerHandler je Modus sowie die
+        // DRT-eigenen RoutingModule (fuer die A-priori-Wartezeitschaetzung, die
+        // discrete_mode_choice VOR der Simulation braucht) - siehe
+        // MultiModeDrtModule-Javadoc. Die QSim-Komponenten selbst werden NICHT
+        // hier aktiviert (Guice-Module haben keinen Controler-Zugriff), sondern
+        // vom Aufrufer aus prepareControler(...) via
+        // controler.configureQSimComponents(DvrpQSimComponents.activateAllModes(...)).
+        install(new DvrpModule());
+        install(new MultiModeDrtModule());
     }
 }

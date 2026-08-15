@@ -15,13 +15,15 @@ import java.util.Map;
  *          + beta_inVehicleTime_j * ImFahrzeugZeit(i,j)
  *          + beta_waitTime_j      * Wartezeit(i,j)
  *          + beta_cost_j          * Kosten(i,j)
- *          + delta_j              * 1[vorheriger Modus = j]
+ *          + delta_{prevMode,j}   * 1[vorheriger Modus gewaehlt]
  *          + SUM_k gamma_jk       * X*_ik
  *
  * Die Bloecke entsprechen den theoretischen Saeulen der Arbeit:
  *   ASC                          - modusspezifische Grundpraeferenz (z. B. AV-Akzeptanz)
  *   beta_inVehicleTime/waitTime/cost - klassische DCM-Level-of-Service-Terme (RUM)
- *   delta                        - Habit Theory / Verhaltenstraegheit
+ *   delta                        - Habit Theory / Verhaltenstraegheit; volle
+ *                                  Uebergangsmatrix (vorheriger Modus -> j),
+ *                                  nicht nur ein Bonus bei Modusbeibehaltung
  *   gamma * X*                   - TPB (Einstellung, subjektive Norm, PBC),
  *                                  TAM (PEOU, wahrgenommener Nutzen) und
  *                                  Protection Motivation Theory (Risiko-/Sicherheitswahrnehmung, Vertrauen)
@@ -65,8 +67,8 @@ public final class behaviourUtilityFunction {
         v += params.getBetaWaitTime() * trip.waitTimeHours();
         v += params.getBetaCost() * trip.costEuro();
 
-        if (previousMode != null && previousMode == params.getMode()) {
-            v += params.getDelta();
+        if (previousMode != null) {
+            v += params.getDelta(previousMode);
         }
 
         for (Map.Entry<String, Double> entry : params.getGamma().entrySet()) {

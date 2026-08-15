@@ -71,7 +71,7 @@ public class UtilityFunctionTest {
         check("Traegheit erhoeht den Nutzen des zuletzt gewaehlten Modus",
                 withHabit > withoutHabit);
         check("Traegheitsbonus entspricht delta",
-                near(withHabit - withoutHabit, p.getDelta()));
+                near(withHabit - withoutHabit, p.getDelta(alternatives.AV)));
     }
 
     static void testSegmentInfluencesAvUtility() {
@@ -128,7 +128,7 @@ public class UtilityFunctionTest {
 
     static void testZeroSdGivesDeterministicResult() {
         modeParams withoutSd = new modeParams(alternatives.AV,
-                -0.5, 0.0, -4.5, 0.0, 0.0, 0.0, -0.2, 0.0, 0.0, 0.4, Map.of());
+                -0.5, 0.0, -4.5, 0.0, 0.0, 0.0, -0.2, 0.0, 0.0, Map.of("AV", 0.4), Map.of());
 
         modeParams z1 = withoutSd.draw(new Random(1));
         modeParams z2 = withoutSd.draw(new Random(999));
@@ -150,7 +150,7 @@ public class UtilityFunctionTest {
                 0.0, 0.0,
                 -0.20, 0.0,
                 0.0,
-                0.40,
+                Map.of("AV", 0.40),
                 Map.of("techAffinity", 0.45,
                         "attitude", 0.70,
                         "perceivedRisk", -0.55));
@@ -163,7 +163,7 @@ public class UtilityFunctionTest {
                 0.0, 0.0,
                 -0.25, 0.0,
                 0.0,
-                0.60,
+                Map.of("PT", 0.60),
                 Map.of("ptAffinity", 0.50));
     }
 

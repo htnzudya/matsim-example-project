@@ -5,6 +5,8 @@ import org.matsim.core.config.ConfigGroup;
 import org.matsim.core.config.ReflectiveConfigGroup;
 import org.matsim.project.model.alternatives;
 import org.matsim.project.model.agentProfile;
+import org.matsim.project.model.behaviourUtilityFunction;
+import org.matsim.project.model.inducedDemandModel;
 import org.matsim.project.model.modeParams;
 
 import java.util.EnumMap;
@@ -37,6 +39,22 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     private double scaleParameter = 1.0;
     private long randomSeed = 4711L;
     private String segmentAttribute = "segment";
+
+    /**
+     * Personenkilometer-Multiplikator je Logsum-Einheit fuer induzierte
+     * Nachfrage (siehe {@link inducedDemandModel}). Steuert das GESAMTE
+     * VKM-Wachstum, aufgeteilt durch tripShare auf Wegeanzahl/Weglaenge -
+     * PLATZHALTER, noch nicht aus eigenen AV-Welt-Ergebnissen kalibriert.
+     */
+    private double theta = inducedDemandModel.THETA_PLACEHOLDER;
+
+    /**
+     * Anteil des Personenkilometer-Wachstums aus induzierter Nachfrage, der
+     * auf mehr Wege entfaellt (Rest auf laengere Wege), in [0, 1] (siehe
+     * {@link inducedDemandModel}). PLATZHALTER (haelftige Aufteilung), noch
+     * nicht aus eigenen AV-Welt-Ergebnissen kalibriert.
+     */
+    private double tripShare = inducedDemandModel.TRIP_SHARE_PLACEHOLDER;
 
     /**
      * Aktivitaetstyp, der im jeweiligen Szenario die Heimataktivitaet markiert.
@@ -101,6 +119,26 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
         this.randomSeed = randomSeed;
     }
 
+    @StringGetter("theta")
+    public double getTheta() {
+        return theta;
+    }
+
+    @StringSetter("theta")
+    public void setTheta(double theta) {
+        this.theta = theta;
+    }
+
+    @StringGetter("tripShare")
+    public double getTripShare() {
+        return tripShare;
+    }
+
+    @StringSetter("tripShare")
+    public void setTripShare(double tripShare) {
+        this.tripShare = tripShare;
+    }
+
     /** Name des Person-Attributs, in dem das Segment eines Agenten steht. */
     @StringGetter("segmentAttribute")
     public String getSegmentAttribute() {
@@ -141,6 +179,11 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
         return result;
     }
 
+    /** Baut das Induzierte-Nachfrage-Modell mit den konfigurierten theta/tripShare. */
+    public inducedDemandModel buildInducedDemandModel(behaviourUtilityFunction utilityFunction) {
+        return new inducedDemandModel(utilityFunction, theta, tripShare);
+    }
+
     // ================= Parametersatz: ein Modus =================
 
     public static final class ModeParamSet extends ReflectiveConfigGroup {
@@ -160,7 +203,14 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
         /** Tarif-/Betriebskostensatz in Euro/km, keine Streuung (siehe modeParams-Javadoc). */
         private double costPerKm = 0.0;
 
-        private double delta = 0.0;
+        /**
+         * Traegheits-/Gewohnheitsbonus je vorherigem Modus, als kommaseparierte
+         * Liste "vormodus=wert" (Schluessel = alternatives-Name, z. B. "CA").
+         * Beispiel: "CA=1.73,PT=0,AV=0.95,PSAV=0.63,SSAV=0.95". Der Eintrag mit
+         * demselben Modus wie dieses ModeParamSet ist der Bonus bei Beibehaltung
+         * des Modus; alle anderen Eintraege erlauben asymmetrische Uebergaenge.
+         */
+        private String deltaByPreviousMode = "";
 
         /**
          * Die gamma-Koeffizienten auf die latenten Konstrukte als
@@ -240,11 +290,11 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
         @StringSetter("costPerKm")
         public void setCostPerKm(double costPerKm) { this.costPerKm = costPerKm; }
 
-        @StringGetter("delta")
-        public double getDelta() { return delta; }
+        @StringGetter("deltaByPreviousMode")
+        public String getDeltaByPreviousMode() { return deltaByPreviousMode; }
 
-        @StringSetter("delta")
-        public void setDelta(double delta) { this.delta = delta; }
+        @StringSetter("deltaByPreviousMode")
+        public void setDeltaByPreviousMode(String deltaByPreviousMode) { this.deltaByPreviousMode = deltaByPreviousMode; }
 
         @StringGetter("gamma")
         public String getGamma() { return gamma; }
@@ -270,7 +320,7 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
                     betaWaitTime, betaWaitTimeSd,
                     betaCost, betaCostSd,
                     costPerKm,
-                    delta,
+                    parseMap(deltaByPreviousMode),
                     parseMap(gamma),
                     parseMap(gammaSd));
         }
