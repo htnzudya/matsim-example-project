@@ -113,7 +113,7 @@
             <param name="betaWaitTimeSd" value="0"/>
             <param name="betaCost" value="-0.806"/>
             <param name="betaCostSd" value="0.05"/>
-            <param name="costPerKm" value="0"/>
+            <param name="costPerKm" value="0.2"/>
             <param name="deltaByPreviousMode" value="CA=1.73,AV=0.45,PT=0,PSAV=0,SSAV=0.45"/>
             <param name="gamma" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=-0.2,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0.4,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
@@ -129,7 +129,7 @@
             <param name="betaWaitTimeSd" value="17.88"/>
             <param name="betaCost" value="-0.806"/>
             <param name="betaCostSd" value="0.05"/>
-            <param name="costPerKm" value="0"/>
+            <param name="costPerKm" value="0.21"/>
             <param name="deltaByPreviousMode" value="CA=0.95,AV=1.73,PT=0,PSAV=0.45,SSAV=0.45"/>
             <param name="gamma" value="techAffinity=0.1,environmentalAwareness=0.2,sharingWillingness=-0.4,drivingEnjoyment=-0.1,perceivedUsefulness=0.2,perceivedEaseOfUse=0.1,trust=0.4,safetyPerception=0.2,perceivedRisk=-0.2,perceivedBehaviouralControl=0.2,socialNorm=0.2"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
@@ -145,7 +145,7 @@
             <param name="betaWaitTimeSd" value="0"/>
             <param name="betaCost" value="-0.806"/>
             <param name="betaCostSd" value="0.06"/>
-            <param name="costPerKm" value="0"/>
+            <param name="costPerKm" value="0.14"/>
             <param name="deltaByPreviousMode" value="CA=0,AV=0,PT=0.85,PSAV=0.45,SSAV=0"/>
             <param name="gamma" value="techAffinity=0,environmentalAwareness=0.1,sharingWillingness=0,drivingEnjoyment=-0.2,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0.4,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
@@ -161,7 +161,7 @@
             <param name="betaWaitTimeSd" value="17.88"/>
             <param name="betaCost" value="-0.806"/>
             <param name="betaCostSd" value="0.05"/>
-            <param name="costPerKm" value="0"/>
+            <param name="costPerKm" value="0.38"/>
             <param name="deltaByPreviousMode" value="CA=0.63,AV=0.45,PT=0.95,PSAV=1.73,SSAV=0.95"/>
             <param name="gamma" value="techAffinity=0.4,environmentalAwareness=0,sharingWillingness=0.2,drivingEnjoyment=-0.2,perceivedUsefulness=0.2,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0.4"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
@@ -177,7 +177,7 @@
             <param name="betaWaitTimeSd" value="17.88"/>
             <param name="betaCost" value="-0.806"/>
             <param name="betaCostSd" value="0.05"/>
-            <param name="costPerKm" value="0"/>
+            <param name="costPerKm" value="0.5"/>
             <param name="deltaByPreviousMode" value="CA=0.95,AV=0.45,PT=0.45,PSAV=0.95,SSAV=1.73"/>
             <param name="gamma" value="techAffinity=0.2,environmentalAwareness=0.1,sharingWillingness=0.4,drivingEnjoyment=-0.2,perceivedUsefulness=0.4,perceivedEaseOfUse=0.1,trust=0.4,safetyPerception=0.4,perceivedRisk=-0.2,perceivedBehaviouralControl=0.4,socialNorm=0.4"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>

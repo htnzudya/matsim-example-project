@@ -115,7 +115,26 @@ SEGMENT_PROBABILITY_ROW = 4
 # Config-Stand, siehe Git-History von config.xml).
 ASC = {"CA": 0.0, "AV": -0.50, "PT": -1.20, "PSAV": -0.70, "SSAV": -1.10}
 ASC_SD = {"CA": 0.0, "AV": 0.60, "PT": 0.50, "PSAV": 0.65, "SSAV": 0.75}
-COST_PER_KM = {"CA": 0.0, "AV": 0.0, "PT": 0.0, "PSAV": 0.0, "SSAV": 0.0}
+
+# Kostensaetze je gefahrenem/gereistem Kilometer (Euro), Stand [Kostentabelle
+# der Arbeit]. CA/AV sind als Euro/Fahrzeug-km angegeben (Betriebskosten des
+# privaten Fahrzeugs) - fuer den alleinfahrenden Halter ist Fahrzeug-km ==
+# Personen-km, deshalb 1:1 uebernehmbar in costPerKm (das im Modell IMMER mit
+# der individuell gefahrenen Distanz des Agenten multipliziert wird, siehe
+# behaviourUtilityEstimator.buildTripContext). PT/PSAV/SSAV sind bereits als
+# Euro/Personen-km angegeben (Tarif fuer den einzelnen Fahrgast), passen also
+# direkt.
+#
+# PSAV: nur der Kilometersatz genannt (0,38 EUR/Pkm), keine feste
+# Grundgebuehr/-fahrt bekannt (anders als SSAV) - falls PSAV auch eine
+# Grundgebuehr hat, bitte nachreichen.
+#
+# SSAV hat ZUSAETZLICH eine feste Grundgebuehr von 1,50 EUR/Fahrt - das
+# aktuelle Modell kennt nur einen linearen Distanztarif (costEuro = costPerKm
+# * distanceKm, siehe modeParams-Javadoc), keine fixe Grundgebuehr pro Fahrt.
+# Die 1,50 EUR/Fahrt sind hier NICHT eingerechnet - fehlt also noch ein
+# eigenes baseFare-Feld im Modell, wenn das beruecksichtigt werden soll.
+COST_PER_KM = {"CA": 0.20, "AV": 0.21, "PT": 0.14, "PSAV": 0.38, "SSAV": 0.50}
 BETA_COST_SD = {"CA": 0.05, "AV": 0.05, "PT": 0.06, "PSAV": 0.05, "SSAV": 0.05}
 
 MINUTES_TO_HOURS = 60.0

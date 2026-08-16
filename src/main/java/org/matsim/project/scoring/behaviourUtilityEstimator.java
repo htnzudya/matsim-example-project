@@ -16,6 +16,7 @@ import org.matsim.core.router.TripRouter;
 import org.matsim.core.utils.timing.TimeInterpretation;
 import org.matsim.core.utils.timing.TimeTracker;
 import org.matsim.facilities.ActivityFacilities;
+import org.matsim.pt.routes.TransitPassengerRoute;
 import org.matsim.project.config.behaviourConfigGroup;
 import org.matsim.project.model.TripContext;
 import org.matsim.project.model.agentProfile;
@@ -36,31 +37,41 @@ import com.google.inject.Inject;
  *
  * BEKANNTE PLATZHALTER (siehe TripContext-Javadoc: "Diese Werte liefert im
  * spaeteren Einsatz die Simulation (Router, Fahrplan, Tarifmodell)"):
- *   - waitTimeHours ist fuer PSAV/SSAV (Schritt 8: echte DRT-Flotten) seit
- *     Schritt 9 EXPECTED_WAIT_TIME_SHARE_OF_MAX_WAIT * maxWaitDuration aus den
- *     DrtRouteConstraints des gerouteten Trips (siehe waitTimeHours(...)) -
- *     eine grobe Naeherung, KEINE dynamische Schaetzung aus dem tatsaechlichen
- *     Systemzustand: DrtRouteCreator setzt diese Constraint bereits bei jeder
- *     Routung (auch ohne DRT-Estimator-Konfiguration), sie ist aber eine
- *     GARANTIERTE OBERGRENZE (drtOptimizationConstraints.maxWaitTime aus der
- *     Config), kein Erwartungswert. Eine echte, aus beobachteten Wartezeiten
- *     abgeleitete Schaetzung braeuchte entweder DRTs eigenen DrtEstimator (der
- *     aber nur im simulationType=estimateAndTeleport-Modus greift und damit
- *     die echte Flottensimulation/Leerfahrten ersetzen wuerde, siehe
- *     DrtModeRoutingModule.install()) oder eine eigene Auswertung beobachteter
- *     Wartezeiten aus Vor-Iterationen (Kandidat fuer einen spaeteren Schritt).
- *     Fuer CA/AV/PT bleibt waitTimeHours weiterhin 0.0 - eine echte PT-Zugangs-
- *     /Wartezeit braucht den PTWaitingTimeEstimator des Contribs.
+ *   - waitTimeHours setzt sich seit Schritt 10 aus zwei UNABHAENGIGEN, sich
+ *     gegenseitig ausschliessenden Quellen zusammen (ein gerouteter Trip hat
+ *     nie beide, da discrete_mode_choice pro Alternative separat routet):
+ *
+ *     PT: ASSUMED_PT_WAIT_TIME_PER_BOARDING_SECONDS je TransitPassengerRoute-
+ *     Leg (siehe ptWaitTimeHours(...) fuer die Begruendung: SwissRailRaptor
+ *     baeckt die reale Wartezeit bereits IN leg.getTravelTime() der PT-Leg
+ *     ein, eine echte Trennung braeuchte direkten SwissRailRaptor-Zugriff
+ *     statt des generischen TripRouter-Pfads - bewusst nicht Teil dieses
+ *     Schritts). Wird von inVehicleTimeHours ABGEZOGEN (siehe
+ *     buildTripContext), sonst wuerde dieselbe Zeitspanne doppelt gezaehlt
+ *     (einmal ueber betaInVehicleTime, einmal ueber betaWaitTime).
+ *
+ *     PSAV/SSAV (Schritt 8: echte DRT-Flotten): weiterhin
+ *     EXPECTED_WAIT_TIME_SHARE_OF_MAX_WAIT * maxWaitDuration aus den
+ *     DrtRouteConstraints (siehe drtWaitTimeHours(...)) - eine grobe
+ *     Naeherung (garantierte Obergrenze aus der Config, kein
+ *     Erwartungswert), KEINE dynamische Schaetzung aus dem tatsaechlichen
+ *     Systemzustand. Eine solche braeuchte entweder DRTs eigenen
+ *     DrtEstimator (der aber nur im simulationType=estimateAndTeleport-Modus
+ *     greift und damit die echte Flottensimulation/Leerfahrten ersetzen
+ *     wuerde, siehe DrtModeRoutingModule.install()) oder eine eigene
+ *     Auswertung beobachteter Wartezeiten aus Vor-Iterationen (Kandidat fuer
+ *     einen spaeteren Schritt).
+ *
+ *     CA/AV bleiben bei 0.0 - AV hat (anders als PT/DRT) keine Quelle fuer
+ *     eine geplante/erwartete Wartezeit (kein Fahrplan, keine Flotten-
+ *     Constraints), obwohl betaWaitTime fuer AV aus der SLR befuellt ist.
  *   - costEuro = modeParams.costPerKm * distanceKm (echte, aus dem gerouteten
  *     Trip berechnete Distanz). Kein Grundpreis/Tarifstufen - reine lineare
- *     Distanzkosten. Solange costPerKm in der Config auf 0.0 steht (aktueller
- *     Stand), ist der beta_cost-Term weiterhin wirkungslos, bis echte
- *     Euro/km-Saetze eingetragen werden.
- *   - inVehicleTimeHours ist aktuell die GESAMTE Wegzeit (inkl. evtl. Zugang/
- *     Umstieg), nicht nur reine Fahrzeugzeit - dieselbe Vereinfachung wie bei
- *     der Wartezeit. ANDERS als costEuro kommt diese Zeit aber bereits real
- *     aus dem geplanten/kongestionsabhaengigen Routing, nicht aus einer
- *     Distanz-Umrechnung.
+ *     Distanzkosten.
+ *   - inVehicleTimeHours ist die GESAMTE Wegzeit (inkl. Zu-/Abgang, Umstiege)
+ *     MINUS die oben beschriebene, separat erfasste Wartezeit - kommt real
+ *     aus dem geplanten/kongestionsabhaengigen bzw. schedule-basierten
+ *     Routing, nicht aus einer Distanz-Umrechnung.
  *
  * SCHRITT 6 - FROZEN MIXED-LOGIT-ZIEHUNGEN: agentProfile.draw(...)/modeParams.
  * draw(...) ziehen agentenindividuelle Abweichungen von den Mittelwerten aus
@@ -152,12 +163,22 @@ public class behaviourUtilityEstimator extends AbstractTripRouterEstimator {
 
     /**
      * Anteil von drtOptimizationConstraints.maxWaitTime, der als erwartete
-     * Wartezeit fuer PSAV/SSAV angenommen wird (siehe waitTimeHours(...) und
+     * Wartezeit fuer PSAV/SSAV angenommen wird (siehe drtWaitTimeHours(...) und
      * Klassen-Javadoc: maxWaitTime ist eine garantierte Obergrenze, kein
      * Erwartungswert). PLATZHALTER, noch nicht aus beobachteten Wartezeiten
      * kalibriert.
      */
     static final double EXPECTED_WAIT_TIME_SHARE_OF_MAX_WAIT = 0.5;
+
+    /**
+     * Angenommene durchschnittliche Wartezeit je PT-Einstieg (nicht je
+     * gefahrenem Kilometer/Minute - Wartezeit haengt von der Taktfrequenz ab,
+     * nicht von der Fahrtdauer). PLATZHALTER, noch nicht aus dem echten
+     * Fahrplan (Taktfrequenz je Linie) kalibriert; siehe ptWaitTimeHours(...)
+     * fuer die Begruendung, warum eine echte, aus SwissRailRaptor abgeleitete
+     * Schaetzung hier NICHT einfach moeglich ist.
+     */
+    static final double ASSUMED_PT_WAIT_TIME_PER_BOARDING_SECONDS = 300.0;
 
     private TripContext buildTripContext(DiscreteModeChoiceTrip trip, List<? extends PlanElement> routedTrip,
             double costPerKm) {
@@ -167,6 +188,9 @@ public class behaviourUtilityEstimator extends AbstractTripRouterEstimator {
         timeTracker.addElements(routedTrip);
         double totalTravelTimeHours = (timeTracker.getTime().seconds() - trip.getDepartureTime()) / 3600.0;
 
+        double ptWaitTimeHours = ptWaitTimeHours(routedTrip);
+        double inVehicleTimeHours = totalTravelTimeHours - ptWaitTimeHours;
+
         double distanceKm = 0.0;
         for (PlanElement element : routedTrip) {
             if (element instanceof Leg leg && leg.getRoute() != null) {
@@ -175,16 +199,53 @@ public class behaviourUtilityEstimator extends AbstractTripRouterEstimator {
         }
 
         double costEuro = costPerKm * distanceKm;
+        double waitTimeHours = ptWaitTimeHours + drtWaitTimeHours(routedTrip);
 
-        return new TripContext(totalTravelTimeHours, waitTimeHours(routedTrip), costEuro, distanceKm);
+        return new TripContext(inVehicleTimeHours, waitTimeHours, costEuro, distanceKm);
+    }
+
+    /**
+     * Erwartete Wartezeit fuer PT, siehe Klassen-Javadoc und
+     * ASSUMED_PT_WAIT_TIME_PER_BOARDING_SECONDS.
+     *
+     * WARUM eine feste Annahme je Einstieg statt einer echten, aus dem
+     * Fahrplan abgeleiteten Schaetzung: SwissRailRaptor (der PT-Router hinter
+     * TripRouter) baeckt die Wartezeit auf die naechste Abfahrt bereits IN
+     * leg.getTravelTime() der jeweiligen PT-Leg ein (verifiziert gegen
+     * SwissRailRaptorTest.java, z. B. "8m 20s waiting for pt departure and 5m
+     * pt travel time -> 500s + 300s = 800s" als EINE Leg-Traveltime) -
+     * leg.getDepartureTime() zeigt NICHT die reale Fahrzeugabfahrt, sondern
+     * den Ankunftszeitpunkt am Umsteigepunkt (keine erkennbare Luecke
+     * zwischen Elementen). Eine exakte Trennung braeuchte Zugriff auf
+     * RaptorRoute.RoutePart (depTime vs. boardingTime), die aber nur beim
+     * direkten Aufruf von SwissRailRaptor.calcRoutes(...) verfuegbar sind,
+     * nicht ueber den generischen TripRouter-Pfad, den
+     * AbstractTripRouterEstimator hier nutzt - ein groesserer Umbau, bewusst
+     * nicht Teil dieses Schritts.
+     *
+     * Deshalb: je TransitPassengerRoute-Leg (= je Einstieg/Teilstrecke,
+     * inkl. Umstiege) wird ein fixer, gedeckelter Anteil der Leg-Traveltime
+     * als Wartezeit angenommen - gedeckelt auf die Leg-Traveltime selbst,
+     * damit bei sehr kurzen PT-Legs nicht mehr Wartezeit abgezogen wird, als
+     * die Leg ueberhaupt dauert.
+     */
+    private double ptWaitTimeHours(List<? extends PlanElement> routedTrip) {
+        double waitTimeSeconds = 0.0;
+        for (PlanElement element : routedTrip) {
+            if (element instanceof Leg leg && leg.getRoute() instanceof TransitPassengerRoute
+                    && leg.getTravelTime().isDefined()) {
+                waitTimeSeconds += Math.min(ASSUMED_PT_WAIT_TIME_PER_BOARDING_SECONDS, leg.getTravelTime().seconds());
+            }
+        }
+        return waitTimeSeconds / 3600.0;
     }
 
     /**
      * Erwartete Wartezeit fuer DRT-Modi (PSAV/SSAV), siehe Klassen-Javadoc und
      * EXPECTED_WAIT_TIME_SHARE_OF_MAX_WAIT. Fuer alle anderen Modi (CA/AV/PT,
-     * keine DrtRoute) weiterhin 0.0 - unveraendertes Verhalten.
+     * keine DrtRoute) 0.0.
      */
-    private double waitTimeHours(List<? extends PlanElement> routedTrip) {
+    private double drtWaitTimeHours(List<? extends PlanElement> routedTrip) {
         double waitTimeSeconds = 0.0;
         for (PlanElement element : routedTrip) {
             if (element instanceof Leg leg && leg.getRoute() instanceof DrtRoute drtRoute) {
