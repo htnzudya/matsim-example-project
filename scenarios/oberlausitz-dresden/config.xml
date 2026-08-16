@@ -28,16 +28,15 @@
 		<param name="laneDefinitionsFile" value="null"/>
 	</module>
 
-	<!-- 1pct statt 10pct: bei 10pct + SAV-Flotten reicht 14g Heap nicht
-	     zuverlaessig (OOM bereits in der Analyse-/Output-Phase beobachtet,
-	     nicht nur beim Matrix-Aufbau). 1pct ist der naechst-groessere
-	     VSP-Populationsschnitt nach dem 0,1pct-Wiring-Test - erst hiermit
-	     einen zuverlaessigen End-to-End-Lauf sicherstellen, dann schrittweise
-	     wieder hochskalieren und dabei den tatsaechlichen Speicherbedarf
-	     beobachten (siehe MemoryObserver-Log). -->
+	<!-- Zurueck auf 10pct (voller Zielumfang): war zwischenzeitlich auf 1pct
+	     reduziert, weil 10pct + SAV-Flotten bei 14g Heap nicht zuverlaessig
+	     durchlief (OOM in der Analyse-/Output-Phase). Mit mehr verfuegbarem
+	     RAM (siehe JAVA_XMX=26g in run-oberlausitz-dresden.sh) wieder
+	     hochgesetzt - falls es trotzdem knapp wird: writeDetailedCustomerStats
+	     (siehe unten) war die naechste Stellschraube, wieder auf false setzen. -->
 	<module name="plans">
 		<param name="inputPlansFile"
-		       value="https://svn.vsp.tu-berlin.de/repos/public-svn/matsim/scenarios/countries/de/oberlausitz-dresden/oberlausitz-dresden-v2025.0/input/oberlausitz-dresden-v2025.0-1pct.plans-initial.xml.gz"/>
+		       value="https://svn.vsp.tu-berlin.de/repos/public-svn/matsim/scenarios/countries/de/oberlausitz-dresden/oberlausitz-dresden-v2025.0/input/oberlausitz-dresden-v2025.0-10pct.plans-initial.xml.gz"/>
 		<param name="removingUnnecessaryPlanAttributes" value="true"/>
 	</module>
 
