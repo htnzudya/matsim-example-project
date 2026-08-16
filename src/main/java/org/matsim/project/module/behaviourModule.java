@@ -383,5 +383,10 @@ public final class behaviourModule extends AbstractModule {
         // controler.configureQSimComponents(DvrpQSimComponents.activateAllModes(...)).
         install(new DvrpModule());
         install(new MultiModeDrtModule());
+
+        // Schritt 11: PSAV-/SSAV-Flottengroesse zwischen Iterationen an die
+        // beobachtete Auslastung anpassen, statt sie starr zu lassen - siehe
+        // behaviourDrtFleetSizeController-Javadoc.
+        addControllerListenerBinding().to(behaviourDrtFleetSizeController.class);
     }
 }
