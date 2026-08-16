@@ -28,9 +28,16 @@
 		<param name="laneDefinitionsFile" value="null"/>
 	</module>
 
+	<!-- 1pct statt 10pct: bei 10pct + SAV-Flotten reicht 14g Heap nicht
+	     zuverlaessig (OOM bereits in der Analyse-/Output-Phase beobachtet,
+	     nicht nur beim Matrix-Aufbau). 1pct ist der naechst-groessere
+	     VSP-Populationsschnitt nach dem 0,1pct-Wiring-Test - erst hiermit
+	     einen zuverlaessigen End-to-End-Lauf sicherstellen, dann schrittweise
+	     wieder hochskalieren und dabei den tatsaechlichen Speicherbedarf
+	     beobachten (siehe MemoryObserver-Log). -->
 	<module name="plans">
 		<param name="inputPlansFile"
-		       value="https://svn.vsp.tu-berlin.de/repos/public-svn/matsim/scenarios/countries/de/oberlausitz-dresden/oberlausitz-dresden-v2025.0/input/oberlausitz-dresden-v2025.0-10pct.plans-initial.xml.gz"/>
+		       value="https://svn.vsp.tu-berlin.de/repos/public-svn/matsim/scenarios/countries/de/oberlausitz-dresden/oberlausitz-dresden-v2025.0/input/oberlausitz-dresden-v2025.0-1pct.plans-initial.xml.gz"/>
 		<param name="removingUnnecessaryPlanAttributes" value="true"/>
 	</module>
 
@@ -102,6 +109,10 @@
 			<param name="stopDuration" value="60"/>
 			<param name="idleVehiclesReturnToDepots" value="true"/>
 			<param name="useModeFilteredSubnetwork" value="true"/>
+			<!-- Default ist true - genau diese Analyse/Output-Schreibvorgaenge
+			     (occupancy_time_profiles etc.) sind zuletzt mit OOM abgestuerzt.
+			     Aus fuer einen zuverlaessigen Lauf, spaeter bei Bedarf wieder an. -->
+			<param name="writeDetailedCustomerStats" value="false"/>
 			<param name="vehiclesFile" value="PLATZHALTER_wird_zur_Laufzeit_ueberschrieben.xml"/>
 
 			<!-- gepooltes MOIA-artiges System: virtuelle Haltestellen statt
@@ -143,6 +154,10 @@
 			<param name="stopDuration" value="60"/>
 			<param name="idleVehiclesReturnToDepots" value="true"/>
 			<param name="useModeFilteredSubnetwork" value="true"/>
+			<!-- Default ist true - genau diese Analyse/Output-Schreibvorgaenge
+			     (occupancy_time_profiles etc.) sind zuletzt mit OOM abgestuerzt.
+			     Aus fuer einen zuverlaessigen Lauf, spaeter bei Bedarf wieder an. -->
+			<param name="writeDetailedCustomerStats" value="false"/>
 			<param name="vehiclesFile" value="PLATZHALTER_wird_zur_Laufzeit_ueberschrieben.xml"/>
 
 			<!-- Door-to-Door-Robotaxi ohne Pooling (siehe alternatives.java) -
