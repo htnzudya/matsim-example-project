@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
-import java.util.Set;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -95,9 +94,13 @@ import com.google.inject.Inject;
  *    siehe agentProfile/behaviourConfigGroup.buildSegments) aus der Population
  *    gezogen (collectTemplates(...)) - vermeidet unplausible Attribut-
  *    Kombinationen, die bei unabhaengigen Marginalziehungen entstehen
- *    koennten. Nur diskretionaere Zwecke sind Kandidatenwege (siehe
- *    verhaltensmodell.discretionaryActivityTypePrefixes, PFLICHTFELD - dieses
- *    Add-on rät die Zweck-Taxonomie einer konkreten Population NICHT).
+ *    koennten. Der Zweck wird dabei ZUFAELLIG aus allen tatsaechlich in der
+ *    Population vorkommenden Nicht-Heim-Aktivitaeten gezogen, OHNE
+ *    Einschraenkung auf diskretionaere Zwecke (Auftraggeber-Vorgabe "einfach
+ *    immer random zuweisen" statt einer manuell zu pflegenden Zweck-Taxonomie
+ *    je Szenario) - weicht damit von der urspruenglichen Spezifikation ("nur
+ *    diskretionaere Zwecke, kein Pflichtweg") bewusst ab, siehe
+ *    collectTemplates(...)-Javadoc.
  *    Hat das eigene Segment keine Vorlagen (bzw. hat die Person kein/ein
  *    unbekanntes Segment), wird auf den POPULATIONSWEITEN Vorlagen-Pool
  *    zurueckgegriffen - das deckt insbesondere Agenten OHNE jeden erhobenen
@@ -175,7 +178,6 @@ public final class behaviourCandidateTripInserter implements StartupListener {
     @Override
     public void notifyStartup(StartupEvent event) {
 
-        Set<String> discretionaryPrefixes = cfg.buildDiscretionaryActivityTypePrefixes();
         String homeType = cfg.getHomeActivityType();
         double ascNull = cfg.getAscNull();
         long randomSeed = cfg.getRandomSeed();
@@ -184,13 +186,13 @@ public final class behaviourCandidateTripInserter implements StartupListener {
         Map<alternatives, modeParams> modeParamsByAlternative = cfg.buildModeParams();
         Map<String, agentProfile> segmentsById = cfg.buildSegments();
 
-        Map<String, List<candidateTripTemplate>> templatesBySegment = collectTemplates(discretionaryPrefixes, segmentAttribute);
+        Map<String, List<candidateTripTemplate>> templatesBySegment = collectTemplates(homeType, segmentAttribute);
         List<candidateTripTemplate> allTemplates = templatesBySegment.values().stream()
                 .flatMap(List::stream).toList();
 
         log.info("Nullalternative: " + allTemplates.size() + " Kandidatenweg-Vorlagen aus "
-                + templatesBySegment.size() + " Segmenten gesammelt (diskretionaere Praefixe: "
-                + discretionaryPrefixes + ").");
+                + templatesBySegment.size() + " Segmenten gesammelt (zufaellig aus allen "
+                + "Nicht-Heim-Aktivitaeten der Population, keine Zweck-Einschraenkung).");
 
         int total = 0, inserted = 0, skippedNotHomeEnd = 0, skippedNoTemplate = 0,
                 skippedNoModeAvailable = 0, skippedNullChosen = 0;
@@ -335,14 +337,21 @@ public final class behaviourCandidateTripInserter implements StartupListener {
     }
 
     /**
-     * Sammelt aus der GESAMTEN Population alle diskretionaeren Aktivitaeten
-     * (Praefix in discretionaryPrefixes, siehe behaviourModule.parseActivityType)
-     * mit bekannter Ankunftszeit (vorangehender Leg mit definierter
-     * Abfahrtszeit - die erste Aktivitaet eines Plans hat keine, liefert also
-     * keine Vorlage), gruppiert nach dem Segment DES BEITRAGENDEN AGENTEN.
-     * "Vergleichbare Agenten" = gleiches Segment, siehe Klassen-Javadoc.
+     * Sammelt aus der GESAMTEN Population alle Nicht-Heim-Aktivitaeten mit
+     * bekannter Ankunftszeit (vorangehender Leg mit definierter Abfahrtszeit -
+     * die erste Aktivitaet eines Plans hat keine, liefert also keine Vorlage),
+     * gruppiert nach dem Segment DES BEITRAGENDEN AGENTEN. "Vergleichbare
+     * Agenten" = gleiches Segment, siehe Klassen-Javadoc.
+     *
+     * KEINE Zweck-Einschraenkung (z. B. auf diskretionaere Zwecke): der Zweck
+     * wird zufaellig aus allen tatsaechlich vorkommenden Nicht-Heim-Aktivitaeten
+     * gezogen (Auftraggeber-Vorgabe "einfach immer random zuweisen" statt
+     * einer manuell zu pflegenden Zweck-Taxonomie je Szenario). Das weicht von
+     * der urspruenglichen Spezifikation ("nur diskretionaere Zwecke, kein
+     * Pflichtweg") bewusst ab - ein Kandidatenweg kann dadurch auch einen
+     * Pflichtzweck (z. B. Arbeit) ziehen.
      */
-    private Map<String, List<candidateTripTemplate>> collectTemplates(Set<String> discretionaryPrefixes, String segmentAttribute) {
+    private Map<String, List<candidateTripTemplate>> collectTemplates(String homeType, String segmentAttribute) {
         Map<String, List<candidateTripTemplate>> result = new LinkedHashMap<>();
 
         for (Person person : population.getPersons().values()) {
@@ -354,14 +363,10 @@ public final class behaviourCandidateTripInserter implements StartupListener {
 
             List<PlanElement> elements = person.getSelectedPlan().getPlanElements();
             for (int i = 1; i < elements.size(); i++) {
-                if (!(elements.get(i) instanceof Activity activity)) {
+                if (!(elements.get(i) instanceof Activity activity) || homeType.equals(activity.getType())) {
                     continue;
                 }
                 if (!(elements.get(i - 1) instanceof Leg precedingLeg) || precedingLeg.getDepartureTime().isUndefined()) {
-                    continue;
-                }
-                String purpose = behaviourModule.parseActivityType(activity.getType()).purpose();
-                if (!discretionaryPrefixes.contains(purpose)) {
                     continue;
                 }
                 double typicalDuration = behaviourModule.parseActivityType(activity.getType()).typicalDurationSeconds();
