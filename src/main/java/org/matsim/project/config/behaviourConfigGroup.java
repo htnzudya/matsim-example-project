@@ -5,8 +5,6 @@ import org.matsim.core.config.ConfigGroup;
 import org.matsim.core.config.ReflectiveConfigGroup;
 import org.matsim.project.model.alternatives;
 import org.matsim.project.model.agentProfile;
-import org.matsim.project.model.behaviourUtilityFunction;
-import org.matsim.project.model.inducedDemandModel;
 import org.matsim.project.model.modeParams;
 
 import java.util.EnumMap;
@@ -39,22 +37,6 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     private double scaleParameter = 1.0;
     private long randomSeed = 4711L;
     private String segmentAttribute = "segment";
-
-    /**
-     * Personenkilometer-Multiplikator je Logsum-Einheit fuer induzierte
-     * Nachfrage (siehe {@link inducedDemandModel}). Steuert das GESAMTE
-     * VKM-Wachstum, aufgeteilt durch tripShare auf Wegeanzahl/Weglaenge -
-     * PLATZHALTER, noch nicht aus eigenen AV-Welt-Ergebnissen kalibriert.
-     */
-    private double theta = inducedDemandModel.THETA_PLACEHOLDER;
-
-    /**
-     * Anteil des Personenkilometer-Wachstums aus induzierter Nachfrage, der
-     * auf mehr Wege entfaellt (Rest auf laengere Wege), in [0, 1] (siehe
-     * {@link inducedDemandModel}). PLATZHALTER (haelftige Aufteilung), noch
-     * nicht aus eigenen AV-Welt-Ergebnissen kalibriert.
-     */
-    private double tripShare = inducedDemandModel.TRIP_SHARE_PLACEHOLDER;
 
     /**
      * Aktivitaetstyp, der im jeweiligen Szenario die Heimataktivitaet markiert.
@@ -119,26 +101,6 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
         this.randomSeed = randomSeed;
     }
 
-    @StringGetter("theta")
-    public double getTheta() {
-        return theta;
-    }
-
-    @StringSetter("theta")
-    public void setTheta(double theta) {
-        this.theta = theta;
-    }
-
-    @StringGetter("tripShare")
-    public double getTripShare() {
-        return tripShare;
-    }
-
-    @StringSetter("tripShare")
-    public void setTripShare(double tripShare) {
-        this.tripShare = tripShare;
-    }
-
     /** Name des Person-Attributs, in dem das Segment eines Agenten steht. */
     @StringGetter("segmentAttribute")
     public String getSegmentAttribute() {
@@ -177,11 +139,6 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
             result.put(s.getSegmentId(), s.toAgentProfile());
         }
         return result;
-    }
-
-    /** Baut das Induzierte-Nachfrage-Modell mit den konfigurierten theta/tripShare. */
-    public inducedDemandModel buildInducedDemandModel(behaviourUtilityFunction utilityFunction) {
-        return new inducedDemandModel(utilityFunction, theta, tripShare);
     }
 
     // ================= Parametersatz: ein Modus =================
