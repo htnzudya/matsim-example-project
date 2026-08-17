@@ -112,7 +112,27 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 	protected Config prepareConfig(Config config) {
 
 		config.controller().setOverwriteFileSetting(OverwriteFileSetting.deleteDirectoryIfExists);
-		config.controller().setLastIteration(9);
+
+		// Schritt 16 (Bugfix/Kalibrierung): 9 Iterationen reichten nicht annaehernd
+		// zur Konvergenz - modestats.csv zeigte den AV-Anteil noch klar steigend
+		// (kein Plateau) und scorestats.csv einen monoton FALLENDEN Durchschnitts-
+		// score ueber alle 9 Iterationen (82.6 -> 65.2). Ursache: die VSP-
+		// Konsistenzpruefung hatte das von Anfang an bemaengelt (siehe Logausgabe),
+		// wir hatten es nur nicht behoben: fractionOfIterationsToDisableInnovation
+		// stand auf "Infinity" (die 20%-DiscreteModeChoice-Ziehung mit vollem
+		// Gumbel-Zufallsrauschen laeuft dadurch JEDE Iteration weiter) und
+		// fractionOfIterationsToStartScoreMSA auf 1.0 (nie aktiv). Da
+		// maxAgentPlanMemorySize=1 ist (kein "beste Alternative merken"), kann ein
+		// Agent durch reines Zufallspech in eine schlechtere Alternative rutschen,
+		// ohne dass das je zurueckgedreht wird - kein LOS-getriebenes Gleichgewicht,
+		// sondern ein Drift. lastIteration deutlich hoch (bei 1pct-Population kein
+		// Problem: ~3 Min/Iteration nach dem einmaligen ~10-Min-DVRP-Setup, siehe
+		// stopwatch.csv eines Testlaufs), damit die letzten ~20% der Iterationen
+		// bei eingefrorener Innovation tatsaechlich ein Gleichgewicht ausschreiben
+		// koennen, statt nur einen Zufalls-Schnappschuss.
+		config.controller().setLastIteration(50);
+		config.replanning().setFractionOfIterationsToDisableInnovation(0.8);
+		config.scoring().setFractionOfIterationsToStartScoreMSA(0.8);
 
 		// Oberlausitz/Dresden nutzt bereits "home" als Heimataktivitaet - kein
 		// Override noetig (anders als equil mit "h").
