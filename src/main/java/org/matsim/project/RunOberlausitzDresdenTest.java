@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.core.tools.picocli.CommandLine;
 import org.matsim.api.core.v01.Scenario;
@@ -14,6 +16,7 @@ import org.matsim.api.core.v01.population.Activity;
 import org.matsim.api.core.v01.population.Person;
 import org.matsim.api.core.v01.population.PlanElement;
 import org.matsim.application.MATSimApplication;
+import org.matsim.contrib.drt.run.DrtConfigGroup;
 import org.matsim.contrib.drt.run.MultiModeDrtConfigGroup;
 import org.matsim.contrib.dvrp.run.DvrpQSimComponents;
 import org.matsim.core.config.Config;
@@ -117,7 +120,53 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 
 		new ConfigReader(config).readFile("scenarios/testszenario/config.xml");
 
+		// Schritt 15 (Bugfix): travelTimeMatrixCachePath (siehe oberlausitz-dresden/
+		// config.xml) an die geladene Population koppeln - sonst wirft
+		// FreeSpeedTravelTimeMatrix.<init> eine VerifyException ("numberOfZones ==
+		// zoneSystem.getZones().size()"), sobald ein Cache-File einer FRUEHEREN
+		// population.pct-Stufe (z. B. 10pct) fuer einen Lauf mit ANDERER Stufe
+		// (z. B. 1pct) wiederverwendet wird: die dynamisch aus der Population
+		// berechnete Bediengebiets-Bounding-Box (siehe computeServiceAreaBoundingBox)
+		// aendert sich mit der Populationsgroesse, damit auch das PSAV/SSAV-Subnetz
+		// und dessen Zonenzahl - der alte Cache passt dann nicht mehr zum aktuellen
+		// ZoneSystem. Muss NACH dem ConfigReader-Merge oben laufen (der setzt
+		// travelTimeMatrixCachePath erst).
+		scopeTravelTimeMatrixCacheToPopulation(config);
+
 		return config;
+	}
+
+	/** Siehe prepareConfig(...)-Kommentar zu travelTimeMatrixCachePath. */
+	private static void scopeTravelTimeMatrixCacheToPopulation(Config config) {
+		String populationSuffix = populationSuffix(config.plans().getInputFile());
+		for (DrtConfigGroup drtConfig : MultiModeDrtConfigGroup.get(config).getModalElements()) {
+			String cachePath = drtConfig.getTravelTimeMatrixCachePath();
+			if (cachePath == null || cachePath.isBlank()) {
+				continue;
+			}
+			int dot = cachePath.lastIndexOf('.');
+			String scoped = dot < 0
+					? cachePath + "-" + populationSuffix
+					: cachePath.substring(0, dot) + "-" + populationSuffix + cachePath.substring(dot);
+			drtConfig.setTravelTimeMatrixCachePath(scoped);
+		}
+	}
+
+	/**
+	 * Extrahiert die Populationsstufe (z. B. "1pct"/"10pct") aus dem VSP-
+	 * Dateinamensmuster "...-<stufe>.plans-initial.xml.gz". Fallback (Hash des
+	 * vollen Pfads) fuer Population-Dateien, die diesem Muster nicht folgen -
+	 * degradiert dann sauber zu "jeder Populationsdatei ihr eigener Cache",
+	 * statt eine falsche Stufe zu erraten.
+	 */
+	private static final Pattern POPULATION_PCT_PATTERN = Pattern.compile("-([0-9.]+pct)\\.");
+
+	private static String populationSuffix(String inputPlansFile) {
+		Matcher matcher = POPULATION_PCT_PATTERN.matcher(inputPlansFile);
+		if (matcher.find()) {
+			return matcher.group(1);
+		}
+		return "scope" + Integer.toHexString(inputPlansFile.hashCode());
 	}
 
 	@Override
