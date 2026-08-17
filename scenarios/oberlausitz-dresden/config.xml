@@ -33,15 +33,15 @@
 		<param name="laneDefinitionsFile" value="null"/>
 	</module>
 
-	<!-- Zurueck auf 10pct (voller Zielumfang): war zwischenzeitlich auf 1pct
-	     reduziert, weil 10pct + SAV-Flotten bei 14g Heap nicht zuverlaessig
-	     durchlief (OOM in der Analyse-/Output-Phase). Mit mehr verfuegbarem
-	     RAM (siehe JAVA_XMX=26g in run-oberlausitz-dresden.sh) wieder
-	     hochgesetzt - falls es trotzdem knapp wird: writeDetailedCustomerStats
-	     (siehe unten) war die naechste Stellschraube, wieder auf false setzen. -->
+	<!-- Zurueck auf 1pct: 10pct-Laeufe dauern fuer den aktuellen Entwicklungs-/
+	     Testzyklus zu lange (u. a. DVRP-Fahrzeit-Matrix-Aufbau + SAV-Flotten-
+	     Setup vor Iteration 0). 1pct ist die naechstkleinere beim VSP
+	     verfuegbare Stufe (0.1/1/10/25/100pct) und war in diesem Projekt schon
+	     einmal produktiv im Einsatz (siehe Git-History). Vor einem finalen/
+	     Ergebnis-Lauf wieder auf 10pct (oder hoeher) zurueckstellen. -->
 	<module name="plans">
 		<param name="inputPlansFile"
-		       value="https://svn.vsp.tu-berlin.de/repos/public-svn/matsim/scenarios/countries/de/oberlausitz-dresden/oberlausitz-dresden-v2025.0/input/oberlausitz-dresden-v2025.0-10pct.plans-initial.xml.gz"/>
+		       value="https://svn.vsp.tu-berlin.de/repos/public-svn/matsim/scenarios/countries/de/oberlausitz-dresden/oberlausitz-dresden-v2025.0/input/oberlausitz-dresden-v2025.0-1pct.plans-initial.xml.gz"/>
 		<param name="removingUnnecessaryPlanAttributes" value="true"/>
 	</module>
 
