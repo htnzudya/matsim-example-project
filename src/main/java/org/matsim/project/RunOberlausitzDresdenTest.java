@@ -159,18 +159,9 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 		for (Person person : scenario.getPopulation().getPersons().values()) {
 			for (PlanElement element : person.getSelectedPlan().getPlanElements()) {
 				if (element instanceof Activity activity && knownTypes.add(activity.getType())) {
-					String type = activity.getType();
-					int underscore = type.lastIndexOf('_');
-					double typicalDurationSeconds = 12 * 3600.0;
-					if (underscore >= 0) {
-						try {
-							typicalDurationSeconds = Double.parseDouble(type.substring(underscore + 1));
-						} catch (NumberFormatException e) {
-							// kein numerischer Suffix - Default beibehalten
-						}
-					}
+					double typicalDurationSeconds = behaviourModule.parseActivityType(activity.getType()).typicalDurationSeconds();
 					scoringConfig.addActivityParams(
-							new ScoringConfigGroup.ActivityParams(type).setTypicalDuration(typicalDurationSeconds));
+							new ScoringConfigGroup.ActivityParams(activity.getType()).setTypicalDuration(typicalDurationSeconds));
 				}
 			}
 		}

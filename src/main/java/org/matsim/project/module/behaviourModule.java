@@ -446,6 +446,38 @@ public final class behaviourModule extends AbstractModule {
     }
 
     /**
+     * Zweck + typische Dauer eines Aktivitaetstyps, siehe {@link #parseActivityType(String)}.
+     *
+     * @param purpose               Zweck-Teil vor dem letzten "_" (z. B. "shop" aus "shop_1800").
+     *                              Ohne erkennbaren Zahlensuffix identisch zum vollen Typ.
+     * @param typicalDurationSeconds aus dem Suffix geparste Dauer in Sekunden, sonst 12 Stunden Default.
+     */
+    public record activityTypeInfo(String purpose, double typicalDurationSeconds) {
+    }
+
+    /**
+     * Zerlegt einen Aktivitaetstyp nach der VSP-ueblichen Konvention "zweck_dauerInSekunden"
+     * (z. B. "home_600", "shop_1800" - siehe RunOberlausitzDresdenTest.prepareScenario-Javadoc)
+     * in Zweck und typische Dauer. Wird sowohl fuer die dynamische activityParams-Registrierung
+     * (RunOberlausitzDresdenTest) als auch fuer die Erkennung diskretionaerer Zwecke beim
+     * Kandidatenweg (behaviourCandidateTripInserter) genutzt - EINE Parsing-Stelle statt zwei,
+     * die sonst auseinanderlaufen koennten.
+     */
+    public static activityTypeInfo parseActivityType(String type) {
+        int underscore = type.lastIndexOf('_');
+        if (underscore < 0) {
+            return new activityTypeInfo(type, 12 * 3600.0);
+        }
+        try {
+            double typicalDurationSeconds = Double.parseDouble(type.substring(underscore + 1));
+            return new activityTypeInfo(type.substring(0, underscore), typicalDurationSeconds);
+        } catch (NumberFormatException e) {
+            // kein numerischer Suffix - ganzer String bleibt Zweck, Default-Dauer
+            return new activityTypeInfo(type, 12 * 3600.0);
+        }
+    }
+
+    /**
      * Generische Variante von behaviourConfigGroup.getOrCreate(...) fuer fremde
      * ConfigGroup-Klassen (MultiModeDrtConfigGroup/DvrpConfigGroup), deren
      * eigene statische get(config)-Methoden KEINE Materialisierung vornehmen -
@@ -510,5 +542,11 @@ public final class behaviourModule extends AbstractModule {
         // beobachtete Auslastung anpassen, statt sie starr zu lassen - siehe
         // behaviourDrtFleetSizeController-Javadoc.
         addControllerListenerBinding().to(behaviourDrtFleetSizeController.class);
+
+        // Nullalternative im DCM: konstruiert vor Iteration 0 je Agent einen
+        // Kandidatenweg und entscheidet per erweitertem Choice-Set (Nullalternative
+        // "kein Weg" + verfuegbare Modi), ob er eingefuegt wird - siehe
+        // behaviourCandidateTripInserter-Klassen-Javadoc.
+        addControllerListenerBinding().to(behaviourCandidateTripInserter.class);
     }
 }

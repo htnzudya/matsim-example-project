@@ -1,6 +1,7 @@
 package org.matsim.project.model;
 
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -109,8 +110,25 @@ public final class behaviourUtilityFunction {
      *   P(j) = exp(mu * V_j) / SUM_m exp(mu * V_m)
      *
      * Numerisch stabilisiert ueber Abzug des Maximums (Log-Sum-Exp-Trick).
+     * Delegiert an {@link #softmax}, siehe dortigen Javadoc.
      */
     public Map<alternatives, Double> probabilities(Map<alternatives, Double> utility) {
+        return softmax(utility, scaleParameter);
+    }
+
+    /**
+     * Generische MNL-Softmax ueber einen beliebigen Alternativen-Schluessel T:
+     *
+     *   P(j) = exp(mu * V_j) / SUM_m exp(mu * V_m)
+     *
+     * Numerisch stabilisiert ueber Abzug des Maximums (Log-Sum-Exp-Trick).
+     * Generisch (nicht auf das {@link alternatives}-Enum beschraenkt), damit
+     * dieselbe, einzige Softmax-Implementierung auch fuer die Nullalternative
+     * (Choice-Set = Optional&lt;alternatives&gt;, siehe behaviourCandidateTripInserter)
+     * genutzt werden kann - EIN Ort, an dem die Wahlwahrscheinlichkeitsformel
+     * steht, nicht zwei potenziell auseinanderlaufende Implementierungen.
+     */
+    public static <T> Map<T, Double> softmax(Map<T, Double> utility, double scaleParameter) {
 
         if (utility.isEmpty()) {
             throw new IllegalArgumentException("Leeres Choice-Set.");
@@ -121,19 +139,50 @@ public final class behaviourUtilityFunction {
             max = Math.max(max, v);
         }
 
-        Map<alternatives, Double> exp = new EnumMap<>(alternatives.class);
+        Map<T, Double> exp = new LinkedHashMap<>();
         double sum = 0.0;
-        for (Map.Entry<alternatives, Double> e : utility.entrySet()) {
+        for (Map.Entry<T, Double> e : utility.entrySet()) {
             double x = Math.exp(scaleParameter * (e.getValue() - max));
             exp.put(e.getKey(), x);
             sum += x;
         }
 
-        Map<alternatives, Double> p = new EnumMap<>(alternatives.class);
-        for (Map.Entry<alternatives, Double> e : exp.entrySet()) {
+        Map<T, Double> p = new LinkedHashMap<>();
+        for (Map.Entry<T, Double> e : exp.entrySet()) {
             p.put(e.getKey(), e.getValue() / sum);
         }
         return p;
+    }
+
+    /**
+     * Zieht eine Alternative aus einer Wahlwahrscheinlichkeitsverteilung ueber
+     * die kumulierte Verteilung: iteriert die Eintraege in Map-Reihenfolge
+     * (daher LinkedHashMap-Eingabe fuer eine STABILE, reproduzierbare
+     * Reihenfolge - siehe softmax(...), das bereits eine LinkedHashMap liefert)
+     * und liefert die erste Alternative, deren kumulierte Wahrscheinlichkeit
+     * draw ueberschreitet. draw MUSS deterministisch (personen-/salt-gebunden)
+     * erzeugt werden, siehe behaviourCandidateTripInserter-Klassen-Javadoc
+     * ("Nullalternative: u_n deterministisch aus der Agenten-ID").
+     *
+     * @param draw gleichverteilte Zufallszahl in [0, 1)
+     */
+    public static <T> T drawFromCumulative(Map<T, Double> probabilities, double draw) {
+        if (probabilities.isEmpty()) {
+            throw new IllegalArgumentException("Leeres Choice-Set.");
+        }
+        double cumulative = 0.0;
+        T last = null;
+        for (Map.Entry<T, Double> e : probabilities.entrySet()) {
+            cumulative += e.getValue();
+            last = e.getKey();
+            if (draw < cumulative) {
+                return e.getKey();
+            }
+        }
+        // Rundungsfehler (cumulative minimal < 1.0 bei draw sehr nah an 1.0):
+        // letzte Alternative der (stabilen) Reihenfolge liefern statt eine
+        // Exception zu riskieren.
+        return last;
     }
 
     /**

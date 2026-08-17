@@ -9,7 +9,9 @@ import org.matsim.project.model.modeParams;
 
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Die Parameter-Schnittstelle des Add-ons.
@@ -46,6 +48,31 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
      * Nomenklatur (z. B. equil: "h") setzen den Wert per Code oder XML.
      */
     private String homeActivityType = "home";
+
+    /**
+     * ASC_0 der Nullalternative ("kein Kandidatenweg") im erweiterten
+     * Choice-Set C_n+ = C_n ∪ {0} - siehe behaviourCandidateTripInserter-
+     * Klassen-Javadoc. Die Nullalternative traegt bewusst KEINE weiteren
+     * Terme (kein beta, kein gamma, kein delta) - nur diese eine Konstante.
+     * PLATZHALTER-Default 0.0: zu kalibrieren, sodass die simulierte
+     * Wegerate/Person/Tag im Basisszenario die erhobene Wegerate trifft,
+     * danach fuer das AVM-Szenario fixiert (siehe Vorgabe der
+     * Auftraggeber-Zusammenfassung).
+     */
+    private double ascNull = 0.0;
+
+    /**
+     * Kommaseparierte Liste von Aktivitaetstyp-PRAEFIXEN (vor dem "_dauer"-
+     * Suffix, siehe behaviourModule.parseActivityType), die als diskretionaer
+     * gelten und daher als Kandidatenweg-Ziel infrage kommen (z. B.
+     * "shop,leisure,other"). PFLICHTFELD ohne Default: welche Zwecke in der
+     * jeweiligen Population als diskretionaer (kein Pflichtweg) gelten, ist
+     * eine Tatsache der konkreten Szenariodaten (z. B. Oberlausitz/Dresden),
+     * die dieses Add-on nicht raten darf - siehe behaviourCandidateTripInserter,
+     * das bei leerem Wert mit einer klaren Fehlermeldung abbricht statt still
+     * eine falsche Annahme zu treffen.
+     */
+    private String discretionaryActivityTypePrefixes = "";
 
     public behaviourConfigGroup() {
         super(GROUP_NAME);
@@ -110,6 +137,49 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     @StringSetter("segmentAttribute")
     public void setSegmentAttribute(String segmentAttribute) {
         this.segmentAttribute = segmentAttribute;
+    }
+
+    /** ASC_0 der Nullalternative, siehe Feld-Javadoc. */
+    @StringGetter("ascNull")
+    public double getAscNull() {
+        return ascNull;
+    }
+
+    @StringSetter("ascNull")
+    public void setAscNull(double ascNull) {
+        this.ascNull = ascNull;
+    }
+
+    @StringGetter("discretionaryActivityTypePrefixes")
+    public String getDiscretionaryActivityTypePrefixes() {
+        return discretionaryActivityTypePrefixes;
+    }
+
+    @StringSetter("discretionaryActivityTypePrefixes")
+    public void setDiscretionaryActivityTypePrefixes(String discretionaryActivityTypePrefixes) {
+        this.discretionaryActivityTypePrefixes = discretionaryActivityTypePrefixes;
+    }
+
+    /**
+     * Geparste Menge aus {@link #getDiscretionaryActivityTypePrefixes()}.
+     * Wirft, wenn das Pflichtfeld nicht gesetzt ist - siehe Feld-Javadoc.
+     */
+    public Set<String> buildDiscretionaryActivityTypePrefixes() {
+        if (discretionaryActivityTypePrefixes == null || discretionaryActivityTypePrefixes.isBlank()) {
+            throw new IllegalStateException(
+                    "verhaltensmodell.discretionaryActivityTypePrefixes ist nicht gesetzt. "
+                            + "Der Kandidatenweg (Nullalternative) darf nur diskretionaere Zwecke als Ziel "
+                            + "ziehen - bitte in der Config die tatsaechlichen Aktivitaetstyp-Praefixe der "
+                            + "Population eintragen (z. B. \"shop,leisure,other\").");
+        }
+        Set<String> result = new LinkedHashSet<>();
+        for (String prefix : discretionaryActivityTypePrefixes.split(",")) {
+            String trimmed = prefix.trim();
+            if (!trimmed.isEmpty()) {
+                result.add(trimmed);
+            }
+        }
+        return result;
     }
 
     @Override

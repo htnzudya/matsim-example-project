@@ -14,7 +14,9 @@ SpreadsheetML-XML, das wird hier direkt geparst.
 
 Was NICHT aus den Excel-Dateien kommt (in diesem Skript als Konstante
 gepflegt): asc/ascSd/costPerKm je Modus, betaCostSd, scaleParameter,
-randomSeed, segmentAttribute, homeActivityType.
+randomSeed, segmentAttribute, homeActivityType, ascNull,
+discretionaryActivityTypePrefixes (Nullalternative im DCM, siehe
+behaviourCandidateTripInserter).
 
 Konstrukte: beide Excel-Dateien sind auf denselben Satz von 11 SLR-Konstrukten
 abgestimmt (TAM/TPB/PMT) - Zeilen 2-12 in fertigeabmparameter.xlsx
@@ -353,14 +355,20 @@ def render_module(abm_data, segments):
         <param name="scaleParameter" value="1.0"/>
         <param name="randomSeed" value="4711"/>
         <param name="segmentAttribute" value="segment"/>
-        <param name="theta" value="0.2"/>
-        <param name="tripShare" value="0.5"/>
-        <!-- theta: Personenkilometer-Multiplikator je Logsum-Einheit fuer
-             induzierte Nachfrage (Gesamteffekt). tripShare: Anteil davon
-             (0..1), der auf mehr Wege entfaellt statt auf laengere Wege -
-             T_ind * D_ind = VKM_ind, keine Doppelzaehlung. Beide PLATZHALTER
-             (theta=+20%, tripShare=haelftig), noch nicht aus eigenen
-             AV-Welt-Ergebnissen kalibriert - wird spaeter aktualisiert. -->
+        <param name="ascNull" value="0.0"/>
+        <param name="discretionaryActivityTypePrefixes" value=""/>
+        <!-- Nullalternative im DCM (siehe behaviourCandidateTripInserter):
+             ascNull ist PLATZHALTER 0.0 - zu kalibrieren, bis die simulierte
+             Wegerate/Person/Tag im Basisszenario die erhobene Wegerate trifft,
+             danach fuer das AVM-Szenario fixiert. discretionaryActivityTypePrefixes
+             ist ABSICHTLICH LEER: welche Aktivitaetstyp-Praefixe (vor dem
+             "_dauerInSekunden"-Suffix) in der jeweiligen Population als
+             diskretionaer gelten (z. B. "shop,leisure,other"), ist eine
+             Tatsache der konkreten Szenariodaten (z. B. Oberlausitz/Dresden) -
+             muss vor dem Einsatz des Kandidatenwegs per Hand eingetragen
+             werden, siehe behaviourConfigGroup.discretionaryActivityTypePrefixes-
+             Javadoc. Beide NICHT aus den Excel-Dateien, hier als Konstante
+             gepflegt (wie scaleParameter/randomSeed/segmentAttribute). -->
 
 {segment_blocks}
 
