@@ -2,8 +2,11 @@ package org.matsim.project.module;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -339,6 +342,13 @@ public final class behaviourModule extends AbstractModule {
         }
 
         for (DrtConfigGroup drtConfig : multiModeDrtConfig.getModalElements()) {
+            // Schritt 14: travelTimeMatrixCachePath-Verzeichnis (z. B. "cache/psav-
+            // ttmatrix.cache", siehe oberlausitz-dresden/config.xml) muss existieren,
+            // BEVOR DVRP versucht, die Fahrzeit-Matrix dorthin zu schreiben - siehe
+            // ensureTravelTimeMatrixCacheDirectoryExists-Javadoc fuer die Endlosschleife,
+            // die sonst entsteht.
+            ensureTravelTimeMatrixCacheDirectoryExists(config, drtConfig);
+
             int fleetSize;
             int capacity;
             boolean isPsav = alternatives.PSAV.getMatsimMode().equals(drtConfig.getMode());
@@ -393,6 +403,46 @@ public final class behaviourModule extends AbstractModule {
         new TransportModeNetworkFilter(network).filter(subnetwork, Set.of(mode));
         NetworkUtils.cleanNetwork(subnetwork, Set.of(mode));
         return subnetwork;
+    }
+
+    /**
+     * Schritt 14: legt das Verzeichnis von drtConfig.getTravelTimeMatrixCachePath()
+     * an, falls noch nicht vorhanden. No-Op, wenn kein Cache-Pfad konfiguriert ist.
+     *
+     * Hintergrund (siehe RunOberlausitzDresdenTest-Klassen-Javadoc/Bug-Analyse eines
+     * echten Laufs): DVRPs FreeSpeedTravelTimeMatrix.write(...) schreibt ueber einen
+     * rohen java.io.FileOutputStream (siehe MATSims IOUtils.getOutputStream) - der
+     * legt KEIN fehlendes Elternverzeichnis an, sondern wirft FileNotFoundException.
+     * Ohne dieses Vorab-Anlegen scheitert der erste Schreibversuch der (mehrere GB
+     * grossen, ~2 Minuten dauernden) Matrix still: die Exception landet in einem
+     * QSim-internen Worker-Thread (DRTs insertion-search-ForkJoinPool baut pro
+     * numberOfThreads-Worker eine eigene, ungescopte DetourTimeEstimator-Instanz,
+     * die ihrerseits die modale TravelTimeMatrix anfordert - siehe
+     * ExtensiveInsertionSearchQSimModule/DrtInsertionSearchManager in
+     * matsim-contrib-drt), sodass Guice den fehlgeschlagenen Singleton nie erfolgreich
+     * cacht. Jeder Worker-Thread (und jeder der beiden Modi PSAV/SSAV) berechnet die
+     * Matrix daraufhin unabhaengig komplett neu, scheitert beim Schreiben erneut usw. -
+     * das haengt die Simulation VOR Iteration 0 in einer Endlosschleife auf (im Log
+     * sichtbar als "Freespeed matrix cache file not found", das sich alle ~2 Minuten
+     * wiederholt, ohne dass die Mobsim je startet), statt sauber abzustuerzen oder
+     * die Matrix einmalig zu cachen.
+     */
+    private static void ensureTravelTimeMatrixCacheDirectoryExists(Config config, DrtConfigGroup drtConfig) {
+        String cachePath = drtConfig.getTravelTimeMatrixCachePath();
+        if (cachePath == null || cachePath.isBlank()) {
+            return;
+        }
+        try {
+            URL url = ConfigGroup.getInputFileURL(config.getContext(), cachePath);
+            Path parent = Paths.get(url.toURI()).getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+        } catch (IOException | URISyntaxException e) {
+            throw new UncheckedIOException(new IOException(
+                    "Konnte Cache-Verzeichnis fuer travelTimeMatrixCachePath='" + cachePath
+                            + "' (Modus " + drtConfig.getMode() + ") nicht anlegen.", e));
+        }
     }
 
     /**
