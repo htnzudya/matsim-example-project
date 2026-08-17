@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import org.matsim.api.core.v01.Coord;
 import org.matsim.api.core.v01.Id;
 import org.matsim.api.core.v01.Scenario;
 import org.matsim.api.core.v01.network.Link;
@@ -205,20 +206,57 @@ public final class behaviourModule extends AbstractModule {
     /**
      * Netzwerk-seitiger Teil der Einbindung fuer Schritt 7 (Netzwerkrouting). Muss
      * aus prepareScenario(...) aufgerufen werden (config-Phase hat noch kein Network).
-     * Erlaubt AV/PSAV/SSAV auf jedem Link, der CA bereits erlaubt - dieselben Strassen,
+     * Erlaubt AV auf jedem Link, der CA bereits erlaubt - dieselben Strassen,
      * dieselbe Stau-Dynamik. Modifiziert das uebergebene Network in-place.
+     *
+     * PSAV/SSAV NICHT hier: die brauchen ein Bediengebiet, siehe
+     * addServiceAreaModesToLinks(...) - sonst baut useModeFilteredSubnetwork
+     * (siehe multiModeDrt-Config) ein "gefiltertes" Subnetz, das genauso gross
+     * wie das volle Netz ist (Schritt 12: bei Oberlausitz/Dresden bekamen
+     * PSAV/SSAV bislang JEDEN car-Link, das Netz ist aber 640 km x 840 km -
+     * weit groesser als ein plausibles SAV-Bediengebiet. Die DVRP-Fahrzeit-
+     * Matrix (Sparse-Node-Matrix) skaliert mit der Knotenzahl DES DEN
+     * Modi ERLAUBTEN Subnetzes, nicht mit der Zonengroesse - das war der
+     * dominante Kostentreiber, nicht die Zonierung).
      */
     public static void addNetworkModesToLinks(Network network) {
         String carMode = alternatives.CA.getMatsimMode();
-        Set<String> extraModes = Set.of(alternatives.AV.getMatsimMode(),
-                alternatives.PSAV.getMatsimMode(), alternatives.SSAV.getMatsimMode());
+        Set<String> avOnly = Set.of(alternatives.AV.getMatsimMode());
 
         for (Link link : network.getLinks().values()) {
             if (link.getAllowedModes().contains(carMode)) {
                 Set<String> modes = new LinkedHashSet<>(link.getAllowedModes());
-                modes.addAll(extraModes);
+                modes.addAll(avOnly);
                 link.setAllowedModes(modes);
             }
+        }
+    }
+
+    /**
+     * Erlaubt PSAV/SSAV auf jedem Link, der CA bereits erlaubt UND dessen
+     * Koordinate innerhalb der uebergebenen Bounding Box liegt (Netz-Koordinaten,
+     * dieselbe CRS wie das Network, bei Oberlausitz/Dresden EPSG:25832) - siehe
+     * addNetworkModesToLinks-Javadoc fuer die Begruendung (DVRP-Fahrzeit-Matrix
+     * skaliert mit der Knotenzahl des SAV-Subnetzes). Getrennt von
+     * addNetworkModesToLinks(...), weil AV (privates Fahrzeug, kein DVRP,
+     * keine teure Matrix) bewusst das VOLLE Netz behaelt.
+     */
+    public static void addServiceAreaModesToLinks(Network network,
+            double minX, double minY, double maxX, double maxY) {
+        String carMode = alternatives.CA.getMatsimMode();
+        Set<String> serviceAreaModes = Set.of(alternatives.PSAV.getMatsimMode(), alternatives.SSAV.getMatsimMode());
+
+        for (Link link : network.getLinks().values()) {
+            if (!link.getAllowedModes().contains(carMode)) {
+                continue;
+            }
+            Coord coord = link.getCoord();
+            if (coord.getX() < minX || coord.getX() > maxX || coord.getY() < minY || coord.getY() > maxY) {
+                continue;
+            }
+            Set<String> modes = new LinkedHashSet<>(link.getAllowedModes());
+            modes.addAll(serviceAreaModes);
+            link.setAllowedModes(modes);
         }
     }
 

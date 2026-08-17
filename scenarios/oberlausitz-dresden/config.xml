@@ -17,10 +17,15 @@
 		<param name="routingAlgorithmType" value="SpeedyALT"/>
 	</module>
 
+	<!-- numberOfThreads (global/qsim/drt je Modus) auf 6 abgestimmt: Server hat
+	     6 Kerne, DrtConfigGroup.numberOfThreads faellt sonst per Default auf
+	     Runtime.getRuntime().availableProcessors() zurueck und wuerde bei
+	     mehreren DRT-Modi (PSAV+SSAV) potenziell mehr Threads anfordern, als
+	     tatsaechlich sinnvoll parallelisierbar sind. -->
 	<module name="global">
 		<param name="coordinateSystem" value="EPSG:25832"/>
 		<param name="insistingOnDeprecatedConfigVersion" value="false"/>
-		<param name="numberOfThreads" value="4"/>
+		<param name="numberOfThreads" value="6"/>
 	</module>
 
 	<module name="network">
@@ -106,6 +111,11 @@
 			<parameterset type="ExtensiveInsertionSearch"/>
 			<param name="mode" value="psav"/>
 			<param name="stopDuration" value="60"/>
+			<!-- Default faellt sonst auf Runtime.getRuntime().availableProcessors()
+			     zurueck - explizit auf global/qsim numberOfThreads (6) begrenzt,
+			     damit PSAV+SSAV nicht zusammen mehr Threads anfordern als
+			     vorhanden. -->
+			<param name="numberOfThreads" value="6"/>
 			<param name="idleVehiclesReturnToDepots" value="true"/>
 			<param name="useModeFilteredSubnetwork" value="true"/>
 			<!-- Default ist true - genau diese Analyse/Output-Schreibvorgaenge
@@ -151,6 +161,11 @@
 			<parameterset type="ExtensiveInsertionSearch"/>
 			<param name="mode" value="ssav"/>
 			<param name="stopDuration" value="60"/>
+			<!-- Default faellt sonst auf Runtime.getRuntime().availableProcessors()
+			     zurueck - explizit auf global/qsim numberOfThreads (6) begrenzt,
+			     damit PSAV+SSAV nicht zusammen mehr Threads anfordern als
+			     vorhanden. -->
+			<param name="numberOfThreads" value="6"/>
 			<param name="idleVehiclesReturnToDepots" value="true"/>
 			<param name="useModeFilteredSubnetwork" value="true"/>
 			<!-- Default ist true - genau diese Analyse/Output-Schreibvorgaenge
@@ -212,7 +227,7 @@
 		<param name="flowCapacityFactor" value="0.01"/>
 		<param name="storageCapacityFactor" value="0.01"/>
 		<param name="mainMode" value="car,longDistanceFreight,bike"/>
-		<param name="numberOfThreads" value="4"/>
+		<param name="numberOfThreads" value="6"/>
 		<param name="startTime" value="00:00:00"/>
 		<param name="stuckTime" value="30.0"/>
 		<param name="trafficDynamics" value="kinematicWaves"/>
@@ -225,6 +240,12 @@
 		<!-- Schritt 8 (SAV-Flotte): von DRT/DVRP (DynAgents) verlangt - siehe
 		     DynQSimConfigConsistencyChecker. -->
 		<param name="simStarttimeInterpretation" value="onlyUseStarttime"/>
+
+		<!-- Schritt 12: DrtConfigGroup warnt explizit davor, dass abgelehnte
+		     DRT-Anfragen (postponed request rejection) die QSim ohne dieses
+		     Setting endlos am Beenden hindern koennen ("stuck endlessly
+		     waiting for a DRT vehicle"), wenn qsim.endTime gesetzt ist. -->
+		<param name="simEndtimeInterpretation" value="onlyUseEndtime"/>
 	</module>
 
 	<module name="replanning">

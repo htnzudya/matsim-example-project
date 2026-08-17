@@ -1,6 +1,7 @@
 package org.matsim.project;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -74,6 +75,27 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 	private static final int PSAV_STOP_COUNT = 3000;
 	private static final int SSAV_FLEET_SIZE = 1500;
 	private static final int SSAV_CAPACITY = 1;
+
+	// Schritt 12: PSAV/SSAV-Bediengebiet als Bounding Box um die tatsaechlichen
+	// Wohnstandorte der (ggf. gesampleten) Population, plus Puffer. Grund:
+	// Oberlausitz/Dresdens Netz deckt eine Flaeche von ~640 km x 840 km ab -
+	// weit groesser als ein plausibles SAV-Bediengebiet. Ohne Einschraenkung
+	// bekommen PSAV/SSAV JEDEN car-Link, das macht useModeFilteredSubnetwork
+	// (siehe multiModeDrt-Config) wirkungslos (das "gefilterte" Subnetz ist
+	// dann genauso gross wie das volle Netz) und laesst DVRPs Fahrzeit-Matrix
+	// (Sparse-Node-Matrix, skaliert mit der Knotenzahl DIESES Subnetzes, nicht
+	// mit der Zonengroesse) auf dem vollen ~250.000-Knoten-Netz rechnen - das
+	// war der dominante Kostentreiber, nicht die Zonierung (cellSize).
+	//
+	// PERZENTILE statt Min/Max: gegen die echte 10pct-Population geprueft, die
+	// 0./100. Perzentile der Wohnkoordinaten sind extreme Ausreisser (ein
+	// Sprung von "p1" nach "p0" ueber hunderte km) - vermutlich vereinzelte
+	// Fernpendler oder Datenartefakte am Rand des Netzes, keine repraesentative
+	// Bediengebietsgrenze. p1..p99 der Wohnkoordinaten liegen dagegen eng
+	// beieinander (~136 km x 79 km) - das ist die tatsaechliche Kernregion.
+	private static final double SERVICE_AREA_PERCENTILE_LOW = 1.0;
+	private static final double SERVICE_AREA_PERCENTILE_HIGH = 99.0;
+	private static final double SERVICE_AREA_BUFFER_METERS = 15_000.0;
 
 	public RunOberlausitzDresdenTest() {
 		super();
@@ -178,10 +200,17 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 			person.getAttributes().putAttribute(cfg.getSegmentAttribute(), segmentIds.get(index));
 		}
 
-		// Schritt 7 (Netzwerkrouting): AV/PSAV/SSAV auf denselben Links wie CA erlauben,
-		// damit sie echtes, kongestionsabhaengiges Routing auf dem echten
-		// Strassennetz statt Teleport nutzen.
+		// Schritt 7 (Netzwerkrouting): AV auf denselben Links wie CA erlauben,
+		// damit es echtes, kongestionsabhaengiges Routing auf dem echten
+		// Strassennetz statt Teleport nutzt.
 		behaviourModule.addNetworkModesToLinks(scenario.getNetwork());
+
+		// Schritt 12: PSAV/SSAV nur innerhalb des Bediengebiets (siehe
+		// SERVICE_AREA_BUFFER_METERS-Javadoc) statt auf dem vollen Netz -
+		// sonst baut DVRP seine Fahrzeit-Matrix auf allen ~250.000 Knoten.
+		double[] serviceArea = computeServiceAreaBoundingBox(scenario, SERVICE_AREA_BUFFER_METERS);
+		behaviourModule.addServiceAreaModesToLinks(scenario.getNetwork(),
+				serviceArea[0], serviceArea[1], serviceArea[2], serviceArea[3]);
 
 		// Oberlausitz/Dresden nutzt vehiclesSource=modeVehicleTypesFromVehiclesData
 		// - QSim braucht dafuer einen registrierten VehicleType je Hauptmodus,
@@ -190,9 +219,54 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 
 		// Schritt 8 (SAV-Flotte): PSAV/SSAV als echte DRT-Flotten mit Dispatch,
 		// Warteschlangen und Leerfahrten statt reiner Netzwerk-Modi. Muss NACH
-		// addNetworkModesToLinks(...) laufen (siehe dortigen Javadoc).
+		// addNetworkModesToLinks(...)/addServiceAreaModesToLinks(...) laufen
+		// (siehe dortigen Javadoc).
 		behaviourModule.prepareDrtFleets(scenario,
 				PSAV_FLEET_SIZE, PSAV_CAPACITY, PSAV_STOP_COUNT, SSAV_FLEET_SIZE, SSAV_CAPACITY);
+	}
+
+	/**
+	 * Bounding Box (minX, minY, maxX, maxY, Netz-Koordinaten) um das
+	 * SERVICE_AREA_PERCENTILE_LOW..SERVICE_AREA_PERCENTILE_HIGH-Perzentil der
+	 * Wohnstandorte ("home_x"/"home_y"-Personenattribute, in den Oberlausitz/
+	 * Dresden-Daten vorhanden) aller Personen der (ggf. gesampleten) Population,
+	 * plus gleichmaessigem Puffer - siehe SERVICE_AREA_BUFFER_METERS-Javadoc fuer
+	 * die Begruendung (Perzentile statt Min/Max wegen Ausreissern). Datengetrieben
+	 * statt fest codierter Koordinaten, damit sich das Bediengebiet automatisch an
+	 * den jeweils geladenen Bevoelkerungsschnitt (0.1pct/1pct/10pct/...) anpasst.
+	 */
+	private static double[] computeServiceAreaBoundingBox(Scenario scenario, double bufferMeters) {
+		List<Double> xs = new ArrayList<>();
+		List<Double> ys = new ArrayList<>();
+
+		for (Person person : scenario.getPopulation().getPersons().values()) {
+			Object homeX = person.getAttributes().getAttribute("home_x");
+			Object homeY = person.getAttributes().getAttribute("home_y");
+			if (homeX instanceof Number x && homeY instanceof Number y) {
+				xs.add(x.doubleValue());
+				ys.add(y.doubleValue());
+			}
+		}
+
+		if (xs.isEmpty()) {
+			throw new IllegalStateException(
+					"Keine Person mit home_x/home_y-Attributen gefunden - Bediengebiet kann nicht bestimmt werden.");
+		}
+
+		Collections.sort(xs);
+		Collections.sort(ys);
+
+		double minX = percentile(xs, SERVICE_AREA_PERCENTILE_LOW) - bufferMeters;
+		double maxX = percentile(xs, SERVICE_AREA_PERCENTILE_HIGH) + bufferMeters;
+		double minY = percentile(ys, SERVICE_AREA_PERCENTILE_LOW) - bufferMeters;
+		double maxY = percentile(ys, SERVICE_AREA_PERCENTILE_HIGH) + bufferMeters;
+
+		return new double[] { minX, minY, maxX, maxY };
+	}
+
+	private static double percentile(List<Double> sortedValues, double percentile) {
+		int index = (int) Math.round(percentile / 100.0 * (sortedValues.size() - 1));
+		return sortedValues.get(Math.max(0, Math.min(sortedValues.size() - 1, index)));
 	}
 
 	@Override

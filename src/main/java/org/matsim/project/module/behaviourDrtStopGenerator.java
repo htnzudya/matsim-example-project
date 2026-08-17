@@ -51,7 +51,7 @@ final class behaviourDrtStopGenerator {
         }
         if (candidateLinks.isEmpty()) {
             throw new IllegalStateException(
-                    "Kein Netzlink erlaubt Modus '" + mode + "' - behaviourModule.addNetworkModesToLinks(...) "
+                    "Kein Netzlink erlaubt Modus '" + mode + "' - behaviourModule.addServiceAreaModesToLinks(...) "
                             + "muss vor der Haltestellengenerierung aufgerufen worden sein.");
         }
 
