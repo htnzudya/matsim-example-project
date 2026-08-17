@@ -31,6 +31,8 @@ import org.matsim.contrib.dvrp.run.DvrpConfigGroup;
 import org.matsim.contrib.dvrp.run.DvrpModule;
 import org.matsim.core.config.Config;
 import org.matsim.core.config.ConfigGroup;
+import org.matsim.core.network.NetworkUtils;
+import org.matsim.core.network.algorithms.TransportModeNetworkFilter;
 import org.matsim.core.config.groups.RoutingConfigGroup;
 import org.matsim.core.config.groups.ScoringConfigGroup;
 import org.matsim.core.controler.AbstractModule;
@@ -339,26 +341,58 @@ public final class behaviourModule extends AbstractModule {
         for (DrtConfigGroup drtConfig : multiModeDrtConfig.getModalElements()) {
             int fleetSize;
             int capacity;
-            if (alternatives.PSAV.getMatsimMode().equals(drtConfig.getMode())) {
+            boolean isPsav = alternatives.PSAV.getMatsimMode().equals(drtConfig.getMode());
+            boolean isSsav = alternatives.SSAV.getMatsimMode().equals(drtConfig.getMode());
+            if (!isPsav && !isSsav) {
+                continue;
+            }
+
+            // Schritt 13: Depot-/Haltestellenlinks aus dem GLEICHEN mode-gefilterten
+            // UND bereinigten Subnetz ziehen, das DVRP intern tatsaechlich benutzt
+            // (useModeFilteredSubnetwork=true), nicht aus dem rohen Network - sonst
+            // kann ein Link zwar den Modus erlauben, aber als nicht erreichbare
+            // Sackgasse/Insel innerhalb des Bediengebiets vom
+            // MultimodalNetworkCleaner aus DEM Subnetz entfernt worden sein
+            // ("Start link ... is null. Please make sure the link is part of the
+            // mode-filtered (and cleaned?) network!"). Siehe
+            // DvrpModeRoutingNetworkModule.install() fuer die Original-Logik, die
+            // hier 1:1 nachgebaut wird.
+            Network cleanedSubnetwork = createCleanedModeSubnetwork(scenario.getNetwork(), drtConfig.getMode());
+
+            if (isPsav) {
                 fleetSize = psavFleetSize;
                 capacity = psavCapacity;
 
                 Path stopsFile = drtDir.resolve(drtConfig.getMode() + "-stops.xml");
-                behaviourDrtStopGenerator.writeStops(scenario.getNetwork(), drtConfig.getMode(), psavStopCount,
+                behaviourDrtStopGenerator.writeStops(cleanedSubnetwork, drtConfig.getMode(), psavStopCount,
                         randomSeed, stopsFile);
                 drtConfig.setTransitStopFile(stopsFile.toUri().toString());
-            } else if (alternatives.SSAV.getMatsimMode().equals(drtConfig.getMode())) {
+            } else {
                 fleetSize = ssavFleetSize;
                 capacity = ssavCapacity;
-            } else {
-                continue;
             }
 
             Path fleetFile = drtDir.resolve(drtConfig.getMode() + "-fleet.xml");
-            behaviourDrtFleetGenerator.writeFleet(scenario.getNetwork(), drtConfig.getMode(), fleetSize, capacity,
+            behaviourDrtFleetGenerator.writeFleet(cleanedSubnetwork, drtConfig.getMode(), fleetSize, capacity,
                     0.0, 30 * 3600.0, randomSeed, fleetFile);
             drtConfig.setVehiclesFile(fleetFile.toUri().toString());
         }
+    }
+
+    /**
+     * Baut dasselbe mode-gefilterte, bereinigte Subnetz, das DVRP intern fuer
+     * useModeFilteredSubnetwork=true verwendet (siehe
+     * DvrpModeRoutingNetworkModule.install(), dort identische Reihenfolge:
+     * TransportModeNetworkFilter dann NetworkUtils.cleanNetwork). Nur Links,
+     * die diese Bereinigung ueberleben, sind als DRT-Fahrzeug-Startlink/
+     * Haltestellenlink gueltig - alles andere wirft zur Laufzeit
+     * "Start link ... is null" (siehe prepareDrtFleets-Javadoc).
+     */
+    private static Network createCleanedModeSubnetwork(Network network, String mode) {
+        Network subnetwork = NetworkUtils.createNetwork();
+        new TransportModeNetworkFilter(network).filter(subnetwork, Set.of(mode));
+        NetworkUtils.cleanNetwork(subnetwork, Set.of(mode));
+        return subnetwork;
     }
 
     /**
