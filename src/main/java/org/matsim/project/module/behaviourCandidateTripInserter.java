@@ -253,8 +253,11 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                     continue;
                 }
 
+                // Abo-/Zeitkarten-Inhaber wie im laufenden DCM (behaviourUtilityEstimator)
+                // beruecksichtigen - dieselbe Nutzenfunktion, siehe Klassen-Javadoc.
+                double costPerKm = params.effectiveCostPerKm(cfg.hasTicket(person));
                 TripContext tripContext = tripContextBuilder.buildTripContext(
-                        timeInterpretation, candidateStart, routed, params.getCostPerKm());
+                        timeInterpretation, candidateStart, routed, costPerKm);
                 utilities.put(Optional.of(alternative), utilityFunction.utility(profile, params, tripContext, null));
             }
 
