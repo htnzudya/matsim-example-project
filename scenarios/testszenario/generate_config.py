@@ -13,8 +13,9 @@ Nur Standardbibliothek (kein openpyxl noetig) - beide xlsx sind ZIPs mit
 SpreadsheetML-XML, das wird hier direkt geparst.
 
 Was NICHT aus den Excel-Dateien kommt (in diesem Skript als Konstante
-gepflegt): asc/ascSd/costPerKm je Modus, betaCostSd, scaleParameter,
-randomSeed, segmentAttribute, homeActivityType.
+gepflegt): asc/ascSd/costPerKm/costPerKmWithTicket je Modus, betaCostSd,
+scaleParameter, randomSeed, segmentAttribute, homeActivityType,
+ticketAttribute, ticketOwnedValue.
 
 Konstrukte: beide Excel-Dateien sind auf denselben Satz von 11 SLR-Konstrukten
 abgestimmt (TAM/TPB/PMT) - Zeilen 2-12 in fertigeabmparameter.xlsx
@@ -136,6 +137,17 @@ ASC_SD = {"CA": 0.0, "AV": 0.60, "PT": 0.50, "PSAV": 0.65, "SSAV": 0.75}
 # eigenes baseFare-Feld im Modell, wenn das beruecksichtigt werden soll.
 COST_PER_KM = {"CA": 0.20, "AV": 0.21, "PT": 0.14, "PSAV": 0.38, "SSAV": 0.50}
 BETA_COST_SD = {"CA": 0.05, "AV": 0.05, "PT": 0.06, "PSAV": 0.05, "SSAV": 0.05}
+
+# costPerKm-Override fuer Personen mit bereits vorhandenem Abo/Zeitkarte (siehe
+# modeParams.costPerKmWithTicket-Javadoc bzw. behaviourConfigGroup.ticketAttribute:
+# Oberlausitz/Dresden liefert das Personenattribut "ptTicket" mit, ~14% der
+# Population "full"). NO_TICKET_OVERRIDE (-1.0) = kein Override, es gilt immer
+# costPerKm. Nur fuer PT gesetzt (0.0 EUR/km, PLATZHALTER: die zusaetzliche
+# Fahrt eines Abo-Inhabers kostet marginal effektiv nichts, der Fixpreis ist
+# bereits bezahlt) - CA/AV/PSAV/SSAV kennen kein Abo-Konzept in diesem Modell.
+NO_TICKET_OVERRIDE = -1.0
+COST_PER_KM_WITH_TICKET = {"CA": NO_TICKET_OVERRIDE, "AV": NO_TICKET_OVERRIDE, "PT": 0.0,
+                           "PSAV": NO_TICKET_OVERRIDE, "SSAV": NO_TICKET_OVERRIDE}
 
 MINUTES_TO_HOURS = 60.0
 
@@ -296,6 +308,7 @@ def render_mode_param_set(mode, data):
             <param name="betaCost" value="{fmt(data['beta_cost'])}"/>
             <param name="betaCostSd" value="{fmt(BETA_COST_SD[mode])}"/>
             <param name="costPerKm" value="{fmt(COST_PER_KM[mode])}"/>
+            <param name="costPerKmWithTicket" value="{fmt(COST_PER_KM_WITH_TICKET[mode])}"/>
             <param name="deltaByPreviousMode" value="{render_map(MODES, data['delta_by_previous_mode'][mode])}"/>
             <param name="gamma" value="{render_map(ALL_CONSTRUCTS, gamma)}"/>
             <param name="gammaSd" value="{render_map(ALL_CONSTRUCTS, gamma_sd)}"/>
@@ -353,6 +366,11 @@ def render_module(abm_data, segments):
         <param name="scaleParameter" value="1.0"/>
         <param name="randomSeed" value="4711"/>
         <param name="segmentAttribute" value="segment"/>
+        <param name="ticketAttribute" value="ptTicket"/>
+        <param name="ticketOwnedValue" value="full"/>
+        <!-- Oberlausitz/Dresden liefert das Personenattribut "ptTicket" mit
+             Werten "none"/"full" (~14% der Population "full") - siehe
+             modeParams.costPerKmWithTicket-Javadoc fuer die Verwendung. -->
         <param name="theta" value="0.2"/>
         <param name="tripShare" value="0.5"/>
         <!-- theta: Personenkilometer-Multiplikator je Logsum-Einheit fuer
