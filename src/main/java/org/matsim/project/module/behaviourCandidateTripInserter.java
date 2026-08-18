@@ -187,6 +187,22 @@ public final class behaviourCandidateTripInserter implements StartupListener {
     private record candidateTripTemplate(Activity sourceActivity, double startTimeSeconds, double durationSeconds) {
     }
 
+    /**
+     * Bugfix: ein reiner homeType.equals(activity.getType())-Vergleich matcht bei
+     * Oberlausitz/Dresden NIE (Aktivitaetstypen folgen der VSP-Konvention
+     * "zweck_dauerInSekunden", z. B. "home_82200", niemals das nackte "home") -
+     * die Folge war eine 100%ige "skipped:notHomeEnd"-Quote in echten Laeufen
+     * (0 inserierte Zusatzwege). behaviourModule.parseActivityType(...) zerlegt
+     * genau diese Konvention bereits an anderer Stelle (Scoring-Registrierung in
+     * RunOberlausitzDresdenTest) - hier wiederverwendet statt eine zweite,
+     * abweichende Parsing-Stelle zu schaffen. Funktioniert unveraendert fuer
+     * Szenarien ohne Suffix-Konvention (z. B. Kelheim "home"): parseActivityType
+     * liefert dort purpose()==type.
+     */
+    private static boolean isHomeActivity(String activityType, String homeType) {
+        return homeType.equals(behaviourModule.parseActivityType(activityType).purpose());
+    }
+
     @Override
     public void notifyStartup(StartupEvent event) {
 
@@ -215,7 +231,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             Plan plan = person.getSelectedPlan();
             List<PlanElement> elements = plan.getPlanElements();
             int lastIndex = elements.size() - 1;
-            if (!(elements.get(lastIndex) instanceof Activity lastActivity) || !homeType.equals(lastActivity.getType())) {
+            if (!(elements.get(lastIndex) instanceof Activity lastActivity) || !isHomeActivity(lastActivity.getType(), homeType)) {
                 skippedNotHomeEnd++;
                 person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:notHomeEnd");
                 continue;
@@ -384,7 +400,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
 
             List<PlanElement> elements = person.getSelectedPlan().getPlanElements();
             for (int i = 1; i < elements.size(); i++) {
-                if (!(elements.get(i) instanceof Activity activity) || homeType.equals(activity.getType())
+                if (!(elements.get(i) instanceof Activity activity) || isHomeActivity(activity.getType(), homeType)
                         || TripStructureUtils.isStageActivityType(activity.getType())) {
                     continue;
                 }
