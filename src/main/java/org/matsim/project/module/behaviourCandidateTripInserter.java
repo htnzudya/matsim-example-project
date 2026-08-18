@@ -20,6 +20,7 @@ import org.matsim.core.controler.events.StartupEvent;
 import org.matsim.core.controler.listener.StartupListener;
 import org.matsim.core.population.PopulationUtils;
 import org.matsim.core.router.TripRouter;
+import org.matsim.core.router.TripStructureUtils;
 import org.matsim.core.utils.timing.TimeInterpretation;
 import org.matsim.facilities.ActivityFacilities;
 import org.matsim.facilities.FacilitiesUtils;
@@ -366,7 +367,8 @@ public final class behaviourCandidateTripInserter implements StartupListener {
 
             List<PlanElement> elements = person.getSelectedPlan().getPlanElements();
             for (int i = 1; i < elements.size(); i++) {
-                if (!(elements.get(i) instanceof Activity activity) || homeType.equals(activity.getType())) {
+                if (!(elements.get(i) instanceof Activity activity) || homeType.equals(activity.getType())
+                        || TripStructureUtils.isStageActivityType(activity.getType())) {
                     continue;
                 }
                 if (!(elements.get(i - 1) instanceof Leg precedingLeg) || precedingLeg.getDepartureTime().isUndefined()) {
