@@ -151,6 +151,17 @@ public final class behaviourCandidateTripInserter implements StartupListener {
      */
     static final double END_OF_DAY_SECONDS = 30 * 3600.0;
 
+    /**
+     * Personenattribut, in das das Ergebnis der Nullalternative-Entscheidung
+     * geschrieben wird - landet dadurch automatisch als Spalte in
+     * output_persons.csv (MATSim schreibt alle Personenattribute mit), ohne
+     * eine eigene Output-Datei zu brauchen. Werte: "inserted:&lt;matsimMode&gt;"
+     * (Kandidatenweg eingefuegt), "optedOut" (Nullalternative gewaehlt),
+     * "skipped:notHomeEnd"/"skipped:noTemplate"/"skipped:noModeAvailable"
+     * (siehe Log-Zusammenfassung fuer dieselben Kategorien).
+     */
+    static final String OUTCOME_ATTRIBUTE = "nullAlternativeOutcome";
+
     private final Population population;
     private final ActivityFacilities facilities;
     private final TripRouter tripRouter;
@@ -206,12 +217,14 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             int lastIndex = elements.size() - 1;
             if (!(elements.get(lastIndex) instanceof Activity lastActivity) || !homeType.equals(lastActivity.getType())) {
                 skippedNotHomeEnd++;
+                person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:notHomeEnd");
                 continue;
             }
 
             List<candidateTripTemplate> pool = resolveTemplatePool(person, segmentAttribute, templatesBySegment, allTemplates);
             if (pool.isEmpty()) {
                 skippedNoTemplate++;
+                person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noTemplate");
                 continue;
             }
 
@@ -221,6 +234,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             double duration = template.durationSeconds();
             if (duration >= END_OF_DAY_SECONDS) {
                 skippedNoTemplate++;
+                person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noTemplate");
                 continue;
             }
             double candidateStart = Math.max(0.0, Math.min(template.startTimeSeconds(), END_OF_DAY_SECONDS - duration));
@@ -265,6 +279,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             if (utilities.size() == 1) {
                 // nur die Nullalternative selbst (kein Modus verfuegbar/routbar) - keine echte Wahl moeglich
                 skippedNoModeAvailable++;
+                person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noModeAvailable");
                 continue;
             }
 
@@ -274,11 +289,13 @@ public final class behaviourCandidateTripInserter implements StartupListener {
 
             if (chosen.isEmpty()) {
                 skippedNullChosen++;
+                person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "optedOut");
                 continue;
             }
 
             insertCandidateTrip(plan, lastIndex, lastActivity, chosen.get().getMatsimMode(),
                     destinationActivity, candidateStart, duration, homeType);
+            person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "inserted:" + chosen.get().getMatsimMode());
             inserted++;
         }
 
