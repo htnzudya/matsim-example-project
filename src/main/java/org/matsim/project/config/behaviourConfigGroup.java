@@ -1,5 +1,6 @@
 package org.matsim.project.config;
 
+import org.matsim.api.core.v01.population.Person;
 import org.matsim.core.config.Config;
 import org.matsim.core.config.ConfigGroup;
 import org.matsim.core.config.ReflectiveConfigGroup;
@@ -59,6 +60,22 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
      */
     private double ascNull = 0.0;
 
+    /**
+     * Name des Person-Attributs, das ein bereits vorhandenes Abo/Zeitkarte
+     * anzeigt (Oberlausitz/Dresden liefert das als "ptTicket" mit, siehe
+     * output_persons.csv eines echten Laufs: Werte "none"/"full", ~14 % der
+     * Population "full"). Wird zusammen mit ticketOwnedValue genutzt, um
+     * modeParams.effectiveCostPerKm(...) zu bestimmen (siehe dortigen Javadoc:
+     * Grenzkosten einer Fahrt sind fuer Abo-Inhaber effektiv 0, nicht der volle
+     * lineare Tarif). Fehlt das Attribut in einer Population, liefert
+     * getAttribute(...) null -> hasTicket=false -> unveraendertes Verhalten
+     * (normaler costPerKm), kein Absturz.
+     */
+    private String ticketAttribute = "ptTicket";
+
+    /** Attributwert, der "hat Abo/Zeitkarte" bedeutet - siehe ticketAttribute-Javadoc. */
+    private String ticketOwnedValue = "full";
+
     public behaviourConfigGroup() {
         super(GROUP_NAME);
     }
@@ -111,6 +128,32 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     @StringSetter("randomSeed")
     public void setRandomSeed(long randomSeed) {
         this.randomSeed = randomSeed;
+    }
+
+    @StringGetter("ticketAttribute")
+    public String getTicketAttribute() {
+        return ticketAttribute;
+    }
+
+    @StringSetter("ticketAttribute")
+    public void setTicketAttribute(String ticketAttribute) {
+        this.ticketAttribute = ticketAttribute;
+    }
+
+    @StringGetter("ticketOwnedValue")
+    public String getTicketOwnedValue() {
+        return ticketOwnedValue;
+    }
+
+    @StringSetter("ticketOwnedValue")
+    public void setTicketOwnedValue(String ticketOwnedValue) {
+        this.ticketOwnedValue = ticketOwnedValue;
+    }
+
+    /** true, wenn person das konfigurierte ticketAttribute mit Wert ticketOwnedValue traegt. */
+    public boolean hasTicket(Person person) {
+        Object value = person.getAttributes().getAttribute(ticketAttribute);
+        return ticketOwnedValue.equals(value == null ? null : value.toString());
     }
 
     /** Name des Person-Attributs, in dem das Segment eines Agenten steht. */
@@ -182,6 +225,9 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
 
         /** Tarif-/Betriebskostensatz in Euro/km, keine Streuung (siehe modeParams-Javadoc). */
         private double costPerKm = 0.0;
+
+        /** costPerKm-Override fuer Abo-Inhaber, siehe modeParams.costPerKmWithTicket-Javadoc. */
+        private double costPerKmWithTicket = modeParams.NO_TICKET_OVERRIDE;
 
         /**
          * Traegheits-/Gewohnheitsbonus je vorherigem Modus, als kommaseparierte
@@ -270,6 +316,12 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
         @StringSetter("costPerKm")
         public void setCostPerKm(double costPerKm) { this.costPerKm = costPerKm; }
 
+        @StringGetter("costPerKmWithTicket")
+        public double getCostPerKmWithTicket() { return costPerKmWithTicket; }
+
+        @StringSetter("costPerKmWithTicket")
+        public void setCostPerKmWithTicket(double costPerKmWithTicket) { this.costPerKmWithTicket = costPerKmWithTicket; }
+
         @StringGetter("deltaByPreviousMode")
         public String getDeltaByPreviousMode() { return deltaByPreviousMode; }
 
@@ -299,7 +351,7 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
                     betaInVehicleTime, betaInVehicleTimeSd,
                     betaWaitTime, betaWaitTimeSd,
                     betaCost, betaCostSd,
-                    costPerKm,
+                    costPerKm, costPerKmWithTicket,
                     parseMap(deltaByPreviousMode),
                     parseMap(gamma),
                     parseMap(gammaSd));

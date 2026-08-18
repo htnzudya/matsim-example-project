@@ -97,6 +97,7 @@ public class behaviourUtilityEstimator extends AbstractTripRouterEstimator {
     private final String segmentAttribute;
     private final long randomSeed;
     private final TimeInterpretation timeInterpretation;
+    private final behaviourConfigGroup cfg;
 
     @Inject
     public behaviourUtilityEstimator(TripRouter tripRouter, ActivityFacilities facilities,
@@ -110,6 +111,7 @@ public class behaviourUtilityEstimator extends AbstractTripRouterEstimator {
         this.segmentsById = cfg.buildSegments();
         this.segmentAttribute = cfg.getSegmentAttribute();
         this.randomSeed = cfg.getRandomSeed();
+        this.cfg = cfg;
     }
 
     @Override
@@ -136,8 +138,12 @@ public class behaviourUtilityEstimator extends AbstractTripRouterEstimator {
         agentProfile profile = resolveProfile(person).draw(new Random(personSeed(person, "profile")));
         modeParams params = meanParams.draw(new Random(personSeed(person, alternative.name())));
 
+        // Abo-/Zeitkarten-Inhaber (siehe modeParams.costPerKmWithTicket-Javadoc):
+        // effektive Grenzkosten statt des vollen Distanztarifs, falls fuer diesen
+        // Modus ein Override konfiguriert ist.
+        double costPerKm = params.effectiveCostPerKm(cfg.hasTicket(person));
         TripContext tripContext = tripContextBuilder.buildTripContext(
-                timeInterpretation, trip.getDepartureTime(), routedTrip, params.getCostPerKm());
+                timeInterpretation, trip.getDepartureTime(), routedTrip, costPerKm);
         alternatives previousMode = alternatives.fromMatsimMode(trip.getInitialMode());
 
         return utilityFunction.utility(profile, params, tripContext, previousMode);

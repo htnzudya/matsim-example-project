@@ -48,6 +48,29 @@ public final class modeParams {
     private final double costPerKm;
 
     /**
+     * Sentinel fuer costPerKmWithTicket: "kein Override konfiguriert" - es gilt
+     * dann immer costPerKm, unabhaengig davon, ob die Person ein Abo/Zeitkarte
+     * hat. Verhindert, dass allein das Vorhandensein dieses Feldes (mit einem
+     * technischen Java-Default wie 0.0) unbemerkt das Verhalten aendert, bevor
+     * es explizit in der Config gesetzt wurde.
+     */
+    public static final double NO_TICKET_OVERRIDE = -1.0;
+
+    /**
+     * costPerKm-Override fuer Personen, die fuer diesen Modus bereits ein
+     * Abo/Zeitkarte besitzen (z. B. PT-Ticket, siehe behaviourConfigGroup.
+     * ticketAttribute/ticketOwnedValue) - deckt den Grenzkosten-Fall ab: eine
+     * zusaetzliche Fahrt kostet einen Abo-Inhaber effektiv nichts (der Fixpreis
+     * ist bereits bezahlt), waehrend Nicht-Inhaber weiterhin den vollen linearen
+     * Distanztarif (costPerKm) zahlen. Ohne diesen Override wuerde das Modell
+     * PT-Kosten fuer JEDE Person gleich hoch ansetzen, obwohl real ~14 % der
+     * Oberlausitz/Dresden-Population laut ptTicket-Attribut bereits eine
+     * Zeitkarte hat (siehe output_persons.csv eines echten Laufs). Default
+     * {@link #NO_TICKET_OVERRIDE} = kein Override, siehe dortigen Javadoc.
+     */
+    private final double costPerKmWithTicket;
+
+    /**
      * Traegheits-/Gewohnheitsbonus je vorherigem Modus (Schluessel =
      * {@link alternatives#name()}), wenn dieser Modus zuletzt gewaehlt wurde.
      * Der bisherige Spezialfall "Bonus nur bei identischem Vor-/Zielmodus"
@@ -68,19 +91,9 @@ public final class modeParams {
                       Map<String, Double> deltaByPreviousMode,
                       Map<String, Double> gamma,
                       Map<String, Double> gammaSd) {
-        this.mode = mode;
-        this.asc = asc;
-        this.ascSd = ascSd;
-        this.betaInVehicleTime = betaInVehicleTime;
-        this.betaInVehicleTimeSd = betaInVehicleTimeSd;
-        this.betaWaitTime = betaWaitTime;
-        this.betaWaitTimeSd = betaWaitTimeSd;
-        this.betaCost = betaCost;
-        this.betaCostSd = betaCostSd;
-        this.costPerKm = costPerKm;
-        this.deltaByPreviousMode = Collections.unmodifiableMap(new LinkedHashMap<>(deltaByPreviousMode));
-        this.gamma = Collections.unmodifiableMap(new LinkedHashMap<>(gamma));
-        this.gammaSd = Collections.unmodifiableMap(new LinkedHashMap<>(gammaSd));
+        this(mode, asc, ascSd, betaInVehicleTime, betaInVehicleTimeSd,
+                betaWaitTime, betaWaitTimeSd, betaCost, betaCostSd, costPerKm, NO_TICKET_OVERRIDE,
+                deltaByPreviousMode, gamma, gammaSd);
     }
 
     /** Bequemlichkeits-Konstruktor ohne gammaSd (alle Gamma-Streuungen = 0). */
@@ -95,6 +108,32 @@ public final class modeParams {
         this(mode, asc, ascSd, betaInVehicleTime, betaInVehicleTimeSd,
                 betaWaitTime, betaWaitTimeSd, betaCost, betaCostSd, costPerKm,
                 deltaByPreviousMode, gamma, Map.of());
+    }
+
+    /** Voller Konstruktor inkl. costPerKmWithTicket, siehe Feld-Javadoc. */
+    public modeParams(alternatives mode,
+                      double asc, double ascSd,
+                      double betaInVehicleTime, double betaInVehicleTimeSd,
+                      double betaWaitTime, double betaWaitTimeSd,
+                      double betaCost, double betaCostSd,
+                      double costPerKm, double costPerKmWithTicket,
+                      Map<String, Double> deltaByPreviousMode,
+                      Map<String, Double> gamma,
+                      Map<String, Double> gammaSd) {
+        this.mode = mode;
+        this.asc = asc;
+        this.ascSd = ascSd;
+        this.betaInVehicleTime = betaInVehicleTime;
+        this.betaInVehicleTimeSd = betaInVehicleTimeSd;
+        this.betaWaitTime = betaWaitTime;
+        this.betaWaitTimeSd = betaWaitTimeSd;
+        this.betaCost = betaCost;
+        this.betaCostSd = betaCostSd;
+        this.costPerKm = costPerKm;
+        this.costPerKmWithTicket = costPerKmWithTicket;
+        this.deltaByPreviousMode = Collections.unmodifiableMap(new LinkedHashMap<>(deltaByPreviousMode));
+        this.gamma = Collections.unmodifiableMap(new LinkedHashMap<>(gamma));
+        this.gammaSd = Collections.unmodifiableMap(new LinkedHashMap<>(gammaSd));
     }
 
     public alternatives getMode() {
@@ -119,6 +158,19 @@ public final class modeParams {
 
     public double getCostPerKm() {
         return costPerKm;
+    }
+
+    public double getCostPerKmWithTicket() {
+        return costPerKmWithTicket;
+    }
+
+    /**
+     * Effektiver costPerKm fuer eine konkrete Person: costPerKmWithTicket, wenn
+     * hasTicket UND ein Override konfiguriert ist (siehe NO_TICKET_OVERRIDE),
+     * sonst der normale costPerKm. Siehe costPerKmWithTicket-Feld-Javadoc.
+     */
+    public double effectiveCostPerKm(boolean hasTicket) {
+        return (hasTicket && costPerKmWithTicket != NO_TICKET_OVERRIDE) ? costPerKmWithTicket : costPerKm;
     }
 
     /** Traegheitsbonus fuer diesen Modus, gegeben den vorherigen Modus (0.0, falls kein Eintrag). */
@@ -168,7 +220,7 @@ public final class modeParams {
                 betaInVehicleTime + betaInVehicleTimeSd * random.nextGaussian(), 0.0,
                 betaWaitTime + betaWaitTimeSd * random.nextGaussian(), 0.0,
                 betaCost + betaCostSd * random.nextGaussian(), 0.0,
-                costPerKm,
+                costPerKm, costPerKmWithTicket,
                 deltaByPreviousMode,
                 drawnGamma,
                 Map.of()
