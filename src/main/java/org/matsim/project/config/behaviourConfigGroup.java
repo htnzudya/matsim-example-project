@@ -7,9 +7,12 @@ import org.matsim.core.config.ReflectiveConfigGroup;
 import org.matsim.project.model.alternatives;
 import org.matsim.project.model.agentProfile;
 import org.matsim.project.model.modeParams;
+import org.matsim.project.model.segmentClassifier;
 
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -63,6 +66,22 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
 
     /** Attributwert, der "hat Abo/Zeitkarte" bedeutet - siehe ticketAttribute-Javadoc. */
     private String ticketOwnedValue = "full";
+
+    /**
+     * Gewichte wA/wG/wH/wS/wR/wM und Temperatur T des Naive-Bayes-
+     * Segmentklassifikators (segmentClassifier.classify), siehe dortigen
+     * Klassen-Javadoc SCHRITT 3/4. wMotorisation=0.0 per Default: die
+     * Motorisierungskomponente der Clusterzentren misst Haushaltsebene,
+     * carAvail misst Personenebene (Cluster "oepnv_gebundener" ist
+     * gegenlaeufig) - wMotorisation=1.0 nur als Sensitivitaetslauf.
+     */
+    private double classifierWeightAge = 1.0;
+    private double classifierWeightGender = 1.0;
+    private double classifierWeightHousehold = 1.0;
+    private double classifierWeightIncome = 1.0;
+    private double classifierWeightRegion = 1.0;
+    private double classifierWeightMotorisation = 0.0;
+    private double classifierTemperature = 1.0;
 
     public behaviourConfigGroup() {
         super(GROUP_NAME);
@@ -153,6 +172,67 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     @StringSetter("segmentAttribute")
     public void setSegmentAttribute(String segmentAttribute) {
         this.segmentAttribute = segmentAttribute;
+    }
+
+    @StringGetter("classifierWeightAge")
+    public double getClassifierWeightAge() { return classifierWeightAge; }
+
+    @StringSetter("classifierWeightAge")
+    public void setClassifierWeightAge(double classifierWeightAge) { this.classifierWeightAge = classifierWeightAge; }
+
+    @StringGetter("classifierWeightGender")
+    public double getClassifierWeightGender() { return classifierWeightGender; }
+
+    @StringSetter("classifierWeightGender")
+    public void setClassifierWeightGender(double classifierWeightGender) { this.classifierWeightGender = classifierWeightGender; }
+
+    @StringGetter("classifierWeightHousehold")
+    public double getClassifierWeightHousehold() { return classifierWeightHousehold; }
+
+    @StringSetter("classifierWeightHousehold")
+    public void setClassifierWeightHousehold(double classifierWeightHousehold) { this.classifierWeightHousehold = classifierWeightHousehold; }
+
+    @StringGetter("classifierWeightIncome")
+    public double getClassifierWeightIncome() { return classifierWeightIncome; }
+
+    @StringSetter("classifierWeightIncome")
+    public void setClassifierWeightIncome(double classifierWeightIncome) { this.classifierWeightIncome = classifierWeightIncome; }
+
+    @StringGetter("classifierWeightRegion")
+    public double getClassifierWeightRegion() { return classifierWeightRegion; }
+
+    @StringSetter("classifierWeightRegion")
+    public void setClassifierWeightRegion(double classifierWeightRegion) { this.classifierWeightRegion = classifierWeightRegion; }
+
+    @StringGetter("classifierWeightMotorisation")
+    public double getClassifierWeightMotorisation() { return classifierWeightMotorisation; }
+
+    @StringSetter("classifierWeightMotorisation")
+    public void setClassifierWeightMotorisation(double classifierWeightMotorisation) { this.classifierWeightMotorisation = classifierWeightMotorisation; }
+
+    @StringGetter("classifierTemperature")
+    public double getClassifierTemperature() { return classifierTemperature; }
+
+    @StringSetter("classifierTemperature")
+    public void setClassifierTemperature(double classifierTemperature) { this.classifierTemperature = classifierTemperature; }
+
+    /** Baut aus der Config die Gewichte fuer segmentClassifier.classify(...). */
+    public segmentClassifier.weights buildClassifierWeights() {
+        return new segmentClassifier.weights(classifierWeightAge, classifierWeightGender, classifierWeightHousehold,
+                classifierWeightIncome, classifierWeightRegion, classifierWeightMotorisation, classifierTemperature);
+    }
+
+    /**
+     * Baut aus der Config die Clusterzentren fuer segmentClassifier.classify(...),
+     * in der Reihenfolge der segmentParams-Bloecke in der Config-XML - Index 0
+     * ist damit der Referenzcluster fuer die Alpha-Normierung dort (SCHRITT 5).
+     */
+    public List<segmentClassifier.clusterCenter> buildClusterCenters() {
+        List<segmentClassifier.clusterCenter> result = new ArrayList<>();
+        for (ConfigGroup cg : getParameterSets(SegmentParamSet.SET_NAME)) {
+            result.add(((SegmentParamSet) cg).toClusterCenter());
+        }
+        return result;
     }
 
     @Override
@@ -355,8 +435,112 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
         /** Streuung der latenten Konstrukte, gleiches Format wie constructs. */
         private String constructsSd = "";
 
+        /**
+         * Sprechender Name des Segments fuer den Output (persons_segment.csv),
+         * siehe segmentClassifier.clusterCenter-Javadoc. Fehlt er (aeltere
+         * Configs), wird segmentId auch als Name verwendet. Heisst NICHT
+         * "name" - das ist bereits final auf ConfigGroup vergeben
+         * (Parametersatz-Typname).
+         */
+        private String displayName = "";
+
+        // Naive-Bayes-Clusterzentren (Hauslbauer/Schade/Petzoldt 2022, Tab. 2-2) -
+        // Profilschicht fuer segmentClassifier.classify(...), siehe dortigen
+        // Klassen-Javadoc. Unabhaengig von constructs/constructsSd oben (das sind
+        // die latenten SLR-Konstrukte der Nutzenfunktion, hier dagegen
+        // demografische Clusterzentren fuer die Segment-Zuordnung selbst).
+        private double ageMu = 0.0;
+        private double ageSd = 1.0;
+        private double pFemale = 0.5;
+        private double hhMu = 0.0;
+        private double hhSd = 1.0;
+        private double sesMu = 0.0;
+        private double sesSd = 1.0;
+        private double regMu = 0.0;
+        private double regSd = 1.0;
+        private double motMu = 0.0;
+        private double motSd = 1.0;
+
         public SegmentParamSet() {
             super(SET_NAME);
+        }
+
+        @StringGetter("displayName")
+        public String getDisplayName() { return displayName; }
+
+        @StringSetter("displayName")
+        public void setDisplayName(String displayName) { this.displayName = displayName; }
+
+        @StringGetter("ageMu")
+        public double getAgeMu() { return ageMu; }
+
+        @StringSetter("ageMu")
+        public void setAgeMu(double ageMu) { this.ageMu = ageMu; }
+
+        @StringGetter("ageSd")
+        public double getAgeSd() { return ageSd; }
+
+        @StringSetter("ageSd")
+        public void setAgeSd(double ageSd) { this.ageSd = ageSd; }
+
+        @StringGetter("pFemale")
+        public double getPFemale() { return pFemale; }
+
+        @StringSetter("pFemale")
+        public void setPFemale(double pFemale) { this.pFemale = pFemale; }
+
+        @StringGetter("hhMu")
+        public double getHhMu() { return hhMu; }
+
+        @StringSetter("hhMu")
+        public void setHhMu(double hhMu) { this.hhMu = hhMu; }
+
+        @StringGetter("hhSd")
+        public double getHhSd() { return hhSd; }
+
+        @StringSetter("hhSd")
+        public void setHhSd(double hhSd) { this.hhSd = hhSd; }
+
+        @StringGetter("sesMu")
+        public double getSesMu() { return sesMu; }
+
+        @StringSetter("sesMu")
+        public void setSesMu(double sesMu) { this.sesMu = sesMu; }
+
+        @StringGetter("sesSd")
+        public double getSesSd() { return sesSd; }
+
+        @StringSetter("sesSd")
+        public void setSesSd(double sesSd) { this.sesSd = sesSd; }
+
+        @StringGetter("regMu")
+        public double getRegMu() { return regMu; }
+
+        @StringSetter("regMu")
+        public void setRegMu(double regMu) { this.regMu = regMu; }
+
+        @StringGetter("regSd")
+        public double getRegSd() { return regSd; }
+
+        @StringSetter("regSd")
+        public void setRegSd(double regSd) { this.regSd = regSd; }
+
+        @StringGetter("motMu")
+        public double getMotMu() { return motMu; }
+
+        @StringSetter("motMu")
+        public void setMotMu(double motMu) { this.motMu = motMu; }
+
+        @StringGetter("motSd")
+        public double getMotSd() { return motSd; }
+
+        @StringSetter("motSd")
+        public void setMotSd(double motSd) { this.motSd = motSd; }
+
+        public segmentClassifier.clusterCenter toClusterCenter() {
+            String resolvedName = displayName.isBlank() ? segmentId : displayName;
+            return new segmentClassifier.clusterCenter(segmentId, resolvedName, probability,
+                    ageMu, ageSd, pFemale, hhMu, hhSd, sesMu, sesSd, regMu, regSd, motMu, motSd);
         }
 
         @StringGetter("segmentId")

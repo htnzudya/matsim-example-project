@@ -1,15 +1,21 @@
 package org.matsim.project;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.tools.picocli.CommandLine;
 import org.matsim.api.core.v01.Scenario;
 import org.matsim.api.core.v01.population.Activity;
@@ -25,7 +31,7 @@ import org.matsim.core.config.groups.ScoringConfigGroup;
 import org.matsim.core.controler.Controler;
 import org.matsim.core.controler.OutputDirectoryHierarchy.OverwriteFileSetting;
 import org.matsim.project.config.behaviourConfigGroup;
-import org.matsim.project.model.agentProfile;
+import org.matsim.project.model.segmentClassifier;
 import org.matsim.project.module.behaviourModule;
 
 /**
@@ -44,9 +50,12 @@ import org.matsim.project.module.behaviourModule;
  *     alternatives-Enum nicht kennt - ohne Entfernen wuerde
  *     behaviourUtilityEstimator beim ersten beruehrten Agenten mit
  *     IllegalArgumentException abbrechen).
- *   - Segment-Zuordnung weiterhin per gewichteter Zufallsziehung (Schritt 5),
- *     nicht aus einer echten Mobilitaetstypologie-Erhebung fuer Oberlausitz/
- *     Dresden.
+ *   - Segment-Zuordnung per Naive-Bayes-Klassifikator (segmentClassifier) auf
+ *     Basis publizierter Clusterzentren (Hauslbauer/Schade/Petzoldt 2022,
+ *     siehe dortigen Klassen-Javadoc) gegen die echten Personenattribute
+ *     (age/sex/hhSize/hhIncome/homeRegioStaR17/carAvail) - keine eigene
+ *     Mobilitaetstypologie-Erhebung fuer Oberlausitz/Dresden, sondern eine
+ *     uebertragene, fremde Typologie.
  *   - Lizenz-Attribut existiert in den Oberlausitz/Dresden-Daten nicht, nur
  *     carAvail - CarModeAvailability behandelt fehlende Lizenz als
  *     "vorhanden" (Default).
@@ -61,6 +70,8 @@ import org.matsim.project.module.behaviourModule;
  */
 @CommandLine.Command(header = ":: OberlausitzDresdenTest ::", version = "1.0")
 public class RunOberlausitzDresdenTest extends MATSimApplication {
+
+	private static final Logger log = LogManager.getLogger(RunOberlausitzDresdenTest.class);
 
 	// Schritt 8/9 (SAV-Flotte): Flottengroesse/-kapazitaet je Modus. PLATZHALTER,
 	// nicht aus einer Bedarfsanalyse kalibriert (grobe Groessenordnung: ~94.500
@@ -255,30 +266,14 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 			}
 		}
 
-		// Segment-Zuordnung wie bei equil/Kelheim (Schritt 5): gewichtete
-		// Zufallsziehung nach den echten Cluster-Anteilen aus
-		// testszenario/config.xml. Die echten carAvail-Attribute der Personen
-		// bleiben unangetastet.
+		// Segment-Zuordnung per Naive-Bayes-Klassifikator (segmentClassifier):
+		// echte Cluster-Zuordnung aus den Personenattributen (age/sex/hhSize/
+		// hhIncome/homeRegioStaR17/carAvail) gegen die publizierten
+		// Clusterzentren, statt einer reinen gewichteten Zufallsziehung. Siehe
+		// segmentClassifier-Klassen-Javadoc fuer SCHRITT 1-6, assignSegments(...)
+		// unten fuer die Anbindung an die Population.
 		behaviourConfigGroup cfg = behaviourConfigGroup.getOrCreate(scenario.getConfig());
-		Map<String, agentProfile> segments = cfg.buildSegments();
-
-		List<String> segmentIds = new ArrayList<>(segments.keySet());
-		double[] cumulative = new double[segmentIds.size()];
-		double sum = 0.0;
-		for (int i = 0; i < segmentIds.size(); i++) {
-			sum += segments.get(segmentIds.get(i)).getProbability();
-			cumulative[i] = sum;
-		}
-
-		Random random = new Random(cfg.getRandomSeed());
-		for (Person person : scenario.getPopulation().getPersons().values()) {
-			double draw = random.nextDouble() * sum;
-			int index = 0;
-			while (index < cumulative.length - 1 && draw > cumulative[index]) {
-				index++;
-			}
-			person.getAttributes().putAttribute(cfg.getSegmentAttribute(), segmentIds.get(index));
-		}
+		assignSegments(scenario, cfg);
 
 		// Schritt 7 (Netzwerkrouting): AV auf denselben Links wie CA erlauben,
 		// damit es echtes, kongestionsabhaengiges Routing auf dem echten
@@ -303,6 +298,133 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 		// (siehe dortigen Javadoc).
 		behaviourModule.prepareDrtFleets(scenario,
 				PSAV_FLEET_SIZE, PSAV_CAPACITY, PSAV_STOP_COUNT, SSAV_FLEET_SIZE, SSAV_CAPACITY);
+	}
+
+	/**
+	 * carAvail-Attributwert -> Motorisierungs-Code, siehe segmentClassifier-
+	 * Klassen-Javadoc SCHRITT 1 (xM).
+	 */
+	private static int carAvailCode(Object carAvail, Person person) {
+		String value = String.valueOf(carAvail);
+		return switch (value) {
+			case "never" -> 0;
+			case "sometimes" -> 1;
+			case "always" -> 2;
+			default -> throw new IllegalArgumentException(
+					"Unbekannter carAvail-Wert '" + value + "' fuer Person " + person.getId());
+		};
+	}
+
+	/** Liest ein numerisches Personenattribut, egal ob es als Number oder als String geparst wurde. */
+	private static double asDouble(Object value, Person person, String attributeName) {
+		if (value instanceof Number number) {
+			return number.doubleValue();
+		}
+		if (value != null) {
+			return Double.parseDouble(value.toString());
+		}
+		throw new IllegalArgumentException("Person " + person.getId() + " hat kein Attribut '" + attributeName + "'.");
+	}
+
+	private static segmentClassifier.agentCovariates extractCovariates(Person person) {
+		var attrs = person.getAttributes();
+		double age = asDouble(attrs.getAttribute("age"), person, "age");
+		boolean female = "f".equals(attrs.getAttribute("sex"));
+		double hhSize = asDouble(attrs.getAttribute("hhSize"), person, "hhSize");
+		double hhIncome = asDouble(attrs.getAttribute("hhIncome"), person, "hhIncome");
+		double regioStaR17 = asDouble(attrs.getAttribute("homeRegioStaR17"), person, "homeRegioStaR17");
+		int carAvail = carAvailCode(attrs.getAttribute("carAvail"), person);
+		return new segmentClassifier.agentCovariates(person.getId().toString(), age, female, hhSize, hhIncome,
+				regioStaR17, carAvail);
+	}
+
+	/**
+	 * Segment-Zuordnung per Naive-Bayes-Klassifikator: extrahiert die
+	 * Rohattribute aller Personen, ruft segmentClassifier.classify(...) (SCHRITT
+	 * 1-6, siehe dortigen Klassen-Javadoc) auf, schreibt das gezogene Segment als
+	 * Personenattribut (unveraendert "segment", wie zuvor bei der gewichteten
+	 * Zufallsziehung - buildSegments()/resolveProfile bleiben dadurch
+	 * unveraendert lauffaehig) sowie persons_segment.csv (personId, segment,
+	 * p_1..p_8) ins Output-Verzeichnis, und loggt die geforderte Validierung.
+	 */
+	private static void assignSegments(Scenario scenario, behaviourConfigGroup cfg) {
+		List<segmentClassifier.agentCovariates> covariates = new ArrayList<>();
+		for (Person person : scenario.getPopulation().getPersons().values()) {
+			covariates.add(extractCovariates(person));
+		}
+
+		List<segmentClassifier.clusterCenter> clusters = cfg.buildClusterCenters();
+		segmentClassifier.result result = segmentClassifier.classify(covariates, clusters, cfg.buildClassifierWeights());
+
+		java.util.Map<String, segmentClassifier.assignment> byPersonId = new java.util.HashMap<>();
+		for (segmentClassifier.assignment assignment : result.assignments()) {
+			byPersonId.put(assignment.personId(), assignment);
+		}
+		for (Person person : scenario.getPopulation().getPersons().values()) {
+			segmentClassifier.assignment assignment = byPersonId.get(person.getId().toString());
+			person.getAttributes().putAttribute(cfg.getSegmentAttribute(), assignment.segmentId());
+		}
+
+		writePersonsSegmentCsv(scenario.getConfig().controller().getOutputDirectory(), result, clusters);
+		logValidation(result.validationReport());
+	}
+
+	private static void writePersonsSegmentCsv(String outputDirectory, segmentClassifier.result result,
+			List<segmentClassifier.clusterCenter> clusters) {
+		try {
+			Path directory = Path.of(outputDirectory);
+			Files.createDirectories(directory);
+			Path csvPath = directory.resolve("persons_segment.csv");
+
+			StringBuilder sb = new StringBuilder();
+			sb.append("personId;segment");
+			for (segmentClassifier.clusterCenter c : clusters) {
+				sb.append(";p_").append(c.segmentId());
+			}
+			sb.append('\n');
+			for (segmentClassifier.assignment assignment : result.assignments()) {
+				sb.append(assignment.personId()).append(';').append(assignment.segmentId());
+				for (segmentClassifier.clusterCenter c : clusters) {
+					sb.append(';').append(String.format(Locale.ROOT, "%.6f", assignment.posterior().get(c.segmentId())));
+				}
+				sb.append('\n');
+			}
+			Files.writeString(csvPath, sb.toString(), StandardCharsets.UTF_8);
+			log.info("Segment-Zuordnung: " + csvPath + " geschrieben (" + result.assignments().size() + " Personen).");
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+	}
+
+	/** SCHRITT "VALIDIERUNG (muss ausgegeben werden)" der Aufgabenstellung. */
+	private static void logValidation(segmentClassifier.validation validation) {
+		log.info("Segment-Zuordnung Validierung:");
+		for (String segmentId : validation.targetShare().keySet()) {
+			double realized = validation.realizedShare().get(segmentId);
+			double target = validation.targetShare().get(segmentId);
+			double deviationPp = (realized - target) * 100.0;
+			log.info(String.format(Locale.ROOT, "  %-32s realisiert=%.4f  pi=%.4f  Abweichung=%.2fpp",
+					segmentId, realized, target, deviationPp));
+			if (Math.abs(deviationPp) >= 1.0) {
+				log.warn(String.format(Locale.ROOT,
+						"  -> Segment '%s' weicht um %.2f Prozentpunkte von pi ab (Vorgabe: < 1pp).",
+						segmentId, deviationPp));
+			}
+		}
+		log.info(String.format(Locale.ROOT, "  mittlere maximale Posteriorwahrscheinlichkeit (Trennschaerfe) = %.4f",
+				validation.meanMaxPosterior()));
+		log.info(String.format(Locale.ROOT,
+				"  Populationsmittel age = %.2f (sd=%.2f, Referenz-Stichprobe 53.5/16.1), Frauenanteil = %.4f (Referenz 0.475)",
+				validation.populationMeanAge(), validation.populationAgeSd(), validation.populationFemaleShare()));
+		if (Math.abs(validation.populationMeanAge() - 53.5) > 5.0 || Math.abs(validation.populationFemaleShare() - 0.475) > 0.05) {
+			log.warn("  -> age/Frauenanteil weichen deutlich von der Referenz-Stichprobe ab - siehe Aufgabenstellungs-HINWEIS "
+					+ "(ggf. age ebenfalls z-transformieren statt Rohjahre zu verwenden).");
+		}
+		if (!validation.allSegmentsOccupied()) {
+			log.warn("  -> nicht alle Segmente sind besetzt!");
+		} else {
+			log.info("  alle Segmente besetzt: ja");
+		}
 	}
 
 	/**

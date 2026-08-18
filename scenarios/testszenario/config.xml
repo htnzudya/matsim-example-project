@@ -43,12 +43,38 @@
         <!-- Oberlausitz/Dresden liefert das Personenattribut "ptTicket" mit
              Werten "none"/"full" (~14% der Population "full") - siehe
              modeParams.costPerKmWithTicket-Javadoc fuer die Verwendung. -->
+        <param name="classifierWeightAge" value="1"/>
+        <param name="classifierWeightGender" value="1"/>
+        <param name="classifierWeightHousehold" value="1"/>
+        <param name="classifierWeightIncome" value="1"/>
+        <param name="classifierWeightRegion" value="1"/>
+        <param name="classifierWeightMotorisation" value="0"/>
+        <param name="classifierTemperature" value="1"/>
+        <!-- Naive-Bayes-Segmentklassifikator (segmentClassifier): Gewichte
+             wA/wG/wH/wS/wR/wM und Temperatur T, siehe dortigen Klassen-Javadoc
+             SCHRITT 3/4. classifierWeightMotorisation=0.0 per Default (siehe
+             Aufgabenstellungs-HINWEIS: Motorisierung misst Haushalts-, carAvail
+             Personenebene) - 1.0 nur als Sensitivitaetslauf. Die Cluster-
+             zentren selbst (ageMu/.../motSd je Segment) stehen unten in den
+             segmentParams-Bloecken. -->
 
         <parameterset type="segmentParams">
             <param name="segmentId" value="multioptionaler_urbanist"/>
             <param name="probability" value="0.0259"/>
             <param name="constructs" value="techAffinity=0.61,environmentalAwareness=0.68,sharingWillingness=5.75,drivingEnjoyment=-0.19,perceivedUsefulness=0.305,perceivedEaseOfUse=0.2745,trust=0.244,safetyPerception=0.2135,perceivedRisk=-0.2135,perceivedBehaviouralControl=0.183,socialNorm=0.1525"/>
             <param name="constructsSd" value="techAffinity=1.11,environmentalAwareness=1.02,sharingWillingness=1.93,drivingEnjoyment=0.95,perceivedUsefulness=0.866025,perceivedEaseOfUse=0.893029,trust=0.916515,safetyPerception=0.93675,perceivedRisk=0.93675,perceivedBehaviouralControl=0.953939,socialNorm=0.968246"/>
+            <param name="displayName" value="multioptionaler_urbanist"/>
+            <param name="ageMu" value="42.68"/>
+            <param name="ageSd" value="11.98"/>
+            <param name="pFemale" value="0.3284"/>
+            <param name="hhMu" value="0.07"/>
+            <param name="hhSd" value="1.05"/>
+            <param name="sesMu" value="0.66"/>
+            <param name="sesSd" value="0.7"/>
+            <param name="regMu" value="0.71"/>
+            <param name="regSd" value="0.96"/>
+            <param name="motMu" value="-0.18"/>
+            <param name="motSd" value="0.84"/>
         </parameterset>
 
         <parameterset type="segmentParams">
@@ -56,6 +82,18 @@
             <param name="probability" value="0.2531"/>
             <param name="constructs" value="techAffinity=-0.42,environmentalAwareness=-0.37,sharingWillingness=-0.16,drivingEnjoyment=0.24,perceivedUsefulness=-0.21,perceivedEaseOfUse=-0.189,trust=-0.168,safetyPerception=-0.147,perceivedRisk=0.147,perceivedBehaviouralControl=-0.126,socialNorm=-0.105"/>
             <param name="constructsSd" value="techAffinity=0.91,environmentalAwareness=0.66,sharingWillingness=0.12,drivingEnjoyment=0.59,perceivedUsefulness=0.866025,perceivedEaseOfUse=0.893029,trust=0.916515,safetyPerception=0.93675,perceivedRisk=0.93675,perceivedBehaviouralControl=0.953939,socialNorm=0.968246"/>
+            <param name="displayName" value="aktiver_aelterer"/>
+            <param name="ageMu" value="63.24"/>
+            <param name="ageSd" value="12.53"/>
+            <param name="pFemale" value="0.467"/>
+            <param name="hhMu" value="-0.51"/>
+            <param name="hhSd" value="0.42"/>
+            <param name="sesMu" value="-0.57"/>
+            <param name="sesSd" value="0.74"/>
+            <param name="regMu" value="-0.16"/>
+            <param name="regSd" value="0.86"/>
+            <param name="motMu" value="-0.38"/>
+            <param name="motSd" value="0.56"/>
         </parameterset>
 
         <parameterset type="segmentParams">
@@ -63,6 +101,18 @@
             <param name="probability" value="0.1886"/>
             <param name="constructs" value="techAffinity=0.34,environmentalAwareness=0.81,sharingWillingness=-0.11,drivingEnjoyment=-0.13,perceivedUsefulness=0.17,perceivedEaseOfUse=0.153,trust=0.136,safetyPerception=0.119,perceivedRisk=-0.119,perceivedBehaviouralControl=0.102,socialNorm=0.085"/>
             <param name="constructsSd" value="techAffinity=0.96,environmentalAwareness=1.01,sharingWillingness=0.08,drivingEnjoyment=0.8,perceivedUsefulness=0.87,perceivedEaseOfUse=0.89,trust=0.92,safetyPerception=0.94,perceivedRisk=0.94,perceivedBehaviouralControl=0.95,socialNorm=0.97"/>
+            <param name="displayName" value="pragmatischer_urbanist"/>
+            <param name="ageMu" value="52.04"/>
+            <param name="ageSd" value="15.07"/>
+            <param name="pFemale" value="0.4603"/>
+            <param name="hhMu" value="-0.31"/>
+            <param name="hhSd" value="0.59"/>
+            <param name="sesMu" value="0.58"/>
+            <param name="sesSd" value="0.75"/>
+            <param name="regMu" value="0.66"/>
+            <param name="regSd" value="0.86"/>
+            <param name="motMu" value="-0.34"/>
+            <param name="motSd" value="0.63"/>
         </parameterset>
 
         <parameterset type="segmentParams">
@@ -70,6 +120,18 @@
             <param name="probability" value="0.0626"/>
             <param name="constructs" value="techAffinity=-0.02,environmentalAwareness=0.96,sharingWillingness=-0.15,drivingEnjoyment=-2.61,perceivedUsefulness=-0.01,perceivedEaseOfUse=-0.009,trust=-0.008,safetyPerception=-0.007,perceivedRisk=0.007,perceivedBehaviouralControl=-0.006,socialNorm=-0.005"/>
             <param name="constructsSd" value="techAffinity=0.97,environmentalAwareness=1.14,sharingWillingness=0.16,drivingEnjoyment=1.23,perceivedUsefulness=0.87,perceivedEaseOfUse=0.89,trust=0.92,safetyPerception=0.94,perceivedRisk=0.94,perceivedBehaviouralControl=0.95,socialNorm=0.97"/>
+            <param name="displayName" value="oepnv_gebundener"/>
+            <param name="ageMu" value="39.63"/>
+            <param name="ageSd" value="22.26"/>
+            <param name="pFemale" value="0.5903"/>
+            <param name="hhMu" value="0.2"/>
+            <param name="hhSd" value="0.91"/>
+            <param name="sesMu" value="-1.16"/>
+            <param name="sesSd" value="1.27"/>
+            <param name="regMu" value="0.26"/>
+            <param name="regSd" value="0.96"/>
+            <param name="motMu" value="0.36"/>
+            <param name="motSd" value="1.13"/>
         </parameterset>
 
         <parameterset type="segmentParams">
@@ -77,6 +139,18 @@
             <param name="probability" value="0.104"/>
             <param name="constructs" value="techAffinity=0.29,environmentalAwareness=-0.23,sharingWillingness=-0.15,drivingEnjoyment=0.19,perceivedUsefulness=0.145,perceivedEaseOfUse=0.1305,trust=0.116,safetyPerception=0.1015,perceivedRisk=-0.1015,perceivedBehaviouralControl=0.087,socialNorm=0.0725"/>
             <param name="constructsSd" value="techAffinity=0.95,environmentalAwareness=0.84,sharingWillingness=0.22,drivingEnjoyment=0.71,perceivedUsefulness=0.87,perceivedEaseOfUse=0.89,trust=0.92,safetyPerception=0.94,perceivedRisk=0.94,perceivedBehaviouralControl=0.95,socialNorm=0.97"/>
+            <param name="displayName" value="familienmitglied_mit_kindern"/>
+            <param name="ageMu" value="42.62"/>
+            <param name="ageSd" value="8.08"/>
+            <param name="pFemale" value="0.5141"/>
+            <param name="hhMu" value="2.1"/>
+            <param name="hhSd" value="0.84"/>
+            <param name="sesMu" value="0.4"/>
+            <param name="sesSd" value="0.82"/>
+            <param name="regMu" value="-0.07"/>
+            <param name="regSd" value="0.9"/>
+            <param name="motMu" value="-0.23"/>
+            <param name="motSd" value="0.77"/>
         </parameterset>
 
         <parameterset type="segmentParams">
@@ -84,6 +158,18 @@
             <param name="probability" value="0.0463"/>
             <param name="constructs" value="techAffinity=0.19,environmentalAwareness=-0.03,sharingWillingness=-0.13,drivingEnjoyment=0.13,perceivedUsefulness=0.095,perceivedEaseOfUse=0.0855,trust=0.076,safetyPerception=0.0665,perceivedRisk=-0.0665,perceivedBehaviouralControl=0.057,socialNorm=0.0475"/>
             <param name="constructsSd" value="techAffinity=0.99,environmentalAwareness=0.91,sharingWillingness=0.3,drivingEnjoyment=0.72,perceivedUsefulness=0.87,perceivedEaseOfUse=0.89,trust=0.92,safetyPerception=0.94,perceivedRisk=0.94,perceivedBehaviouralControl=0.95,socialNorm=0.97"/>
+            <param name="displayName" value="hochmobiler"/>
+            <param name="ageMu" value="52.25"/>
+            <param name="ageSd" value="13.59"/>
+            <param name="pFemale" value="0.3414"/>
+            <param name="hhMu" value="-0.07"/>
+            <param name="hhSd" value="0.87"/>
+            <param name="sesMu" value="0.22"/>
+            <param name="sesSd" value="0.89"/>
+            <param name="regMu" value="0.07"/>
+            <param name="regSd" value="1"/>
+            <param name="motMu" value="0.12"/>
+            <param name="motSd" value="0.96"/>
         </parameterset>
 
         <parameterset type="segmentParams">
@@ -91,6 +177,18 @@
             <param name="probability" value="0.1205"/>
             <param name="constructs" value="techAffinity=-0.37,environmentalAwareness=-0.24,sharingWillingness=-0.16,drivingEnjoyment=0.23,perceivedUsefulness=-0.185,perceivedEaseOfUse=-0.1665,trust=-0.148,safetyPerception=-0.1295,perceivedRisk=0.1295,perceivedBehaviouralControl=-0.111,socialNorm=-0.0925"/>
             <param name="constructsSd" value="techAffinity=1.02,environmentalAwareness=0.9,sharingWillingness=0.12,drivingEnjoyment=0.68,perceivedUsefulness=0.87,perceivedEaseOfUse=0.89,trust=0.92,safetyPerception=0.94,perceivedRisk=0.94,perceivedBehaviouralControl=0.95,socialNorm=0.97"/>
+            <param name="displayName" value="inaktiver_aelterer"/>
+            <param name="ageMu" value="61.53"/>
+            <param name="ageSd" value="15.78"/>
+            <param name="pFemale" value="0.5259"/>
+            <param name="hhMu" value="-0.53"/>
+            <param name="hhSd" value="0.52"/>
+            <param name="sesMu" value="-0.33"/>
+            <param name="sesSd" value="0.89"/>
+            <param name="regMu" value="0.05"/>
+            <param name="regSd" value="0.96"/>
+            <param name="motMu" value="-0.46"/>
+            <param name="motSd" value="0.64"/>
         </parameterset>
 
         <parameterset type="segmentParams">
@@ -98,6 +196,18 @@
             <param name="probability" value="0.199"/>
             <param name="constructs" value="techAffinity=0.17,environmentalAwareness=-0.42,sharingWillingness=-0.19,drivingEnjoyment=0.41,perceivedUsefulness=0.085,perceivedEaseOfUse=0.0765,trust=0.068,safetyPerception=0.0595,perceivedRisk=-0.0595,perceivedBehaviouralControl=0.051,socialNorm=0.0425"/>
             <param name="constructsSd" value="techAffinity=0.88,environmentalAwareness=0.72,sharingWillingness=0.18,drivingEnjoyment=0.5,perceivedUsefulness=0.87,perceivedEaseOfUse=0.89,trust=0.92,safetyPerception=0.94,perceivedRisk=0.94,perceivedBehaviouralControl=0.95,socialNorm=0.97"/>
+            <param name="displayName" value="laendlicher"/>
+            <param name="ageMu" value="49.56"/>
+            <param name="ageSd" value="12.99"/>
+            <param name="pFemale" value="0.4618"/>
+            <param name="hhMu" value="0.12"/>
+            <param name="hhSd" value="0.65"/>
+            <param name="sesMu" value="0.39"/>
+            <param name="sesSd" value="0.82"/>
+            <param name="regMu" value="-0.61"/>
+            <param name="regSd" value="0.92"/>
+            <param name="motMu" value="1.08"/>
+            <param name="motSd" value="1.14"/>
         </parameterset>
 
         <parameterset type="modeParams">
