@@ -16,7 +16,10 @@ Was NICHT aus den Excel-Dateien kommt (in diesem Skript als Konstante
 gepflegt): asc/ascSd/costPerKm/costPerKmWithTicket je Modus, betaCostSd,
 scaleParameter, randomSeed, segmentAttribute, homeActivityType, ascNull
 (Nullalternative im DCM, siehe behaviourCandidateTripInserter),
-ticketAttribute, ticketOwnedValue.
+ticketAttribute, ticketOwnedValue, die Naive-Bayes-Clusterzentren
+(CLUSTER_PARAMS, siehe segmentClassifier-Klassen-Javadoc: Hauslbauer/Schade/
+Petzoldt 2022, Tab. 2-2 - kommen NICHT aus den Excel-Dateien) sowie deren
+Klassifikator-Gewichte (CLASSIFIER_WEIGHTS).
 
 Konstrukte: beide Excel-Dateien sind auf denselben Satz von 11 SLR-Konstrukten
 abgestimmt (TAM/TPB/PMT) - Zeilen 2-12 in fertigeabmparameter.xlsx
@@ -111,6 +114,45 @@ SEGMENT_IDS = [
     "laendlicher",
 ]
 SEGMENT_PROBABILITY_ROW = 4
+
+# Naive-Bayes-Clusterzentren fuer segmentClassifier (siehe dortigen Klassen-
+# Javadoc SCHRITT 1-6): Hauslbauer/Schade/Petzoldt 2022, Tab. 2-2 - fest, NICHT
+# aus einer der beiden Excel-Dateien (die kennen dieses Verfahren nicht),
+# deshalb hier als literale Konstante gepflegt (wie ASC/COST_PER_KM oben).
+# Spalten: name, pi, age_mu, age_sd, p_female, hh_mu, hh_sd, ses_mu, ses_sd,
+# reg_mu, reg_sd, mot_mu, mot_sd - dieselbe Reihenfolge wie in der Vorgabe.
+CLUSTER_PARAMS = {
+    "multioptionaler_urbanist": ("multioptionaler_urbanist", 0.0259, 42.68, 11.98, 0.3284, 0.07, 1.05, 0.66, 0.70, 0.71, 0.96, -0.18, 0.84),
+    "aktiver_aelterer": ("aktiver_aelterer", 0.2531, 63.24, 12.53, 0.4670, -0.51, 0.42, -0.57, 0.74, -0.16, 0.86, -0.38, 0.56),
+    "pragmatischer_urbanist": ("pragmatischer_urbanist", 0.1886, 52.04, 15.07, 0.4603, -0.31, 0.59, 0.58, 0.75, 0.66, 0.86, -0.34, 0.63),
+    "oepnv_gebundener": ("oepnv_gebundener", 0.0626, 39.63, 22.26, 0.5903, 0.20, 0.91, -1.16, 1.27, 0.26, 0.96, 0.36, 1.13),
+    "familienmitglied_mit_kindern": ("familienmitglied_mit_kindern", 0.1040, 42.62, 8.08, 0.5141, 2.10, 0.84, 0.40, 0.82, -0.07, 0.90, -0.23, 0.77),
+    "hochmobiler": ("hochmobiler", 0.0463, 52.25, 13.59, 0.3414, -0.07, 0.87, 0.22, 0.89, 0.07, 1.00, 0.12, 0.96),
+    "inaktiver_aelterer": ("inaktiver_aelterer", 0.1205, 61.53, 15.78, 0.5259, -0.53, 0.52, -0.33, 0.89, 0.05, 0.96, -0.46, 0.64),
+    "laendlicher": ("laendlicher", 0.1990, 49.56, 12.99, 0.4618, 0.12, 0.65, 0.39, 0.82, -0.61, 0.92, 1.08, 1.14),
+}
+# "probability" (=pi) fehlt hier bewusst: der bereits vorhandene "probability"-
+# Param (aus der Segmentierungs-Excel) ist zahlengleich mit pi aus Tab. 2-2
+# (beide Quellen stammen aus derselben Studie) und wird von
+# behaviourConfigGroup.SegmentParamSet.toClusterCenter() bereits als
+# clusterCenter.pi verwendet - ein zweiter "probability"-Param wuerde
+# kollidieren.
+CLUSTER_PARAM_FIELDS = ["displayName", "ageMu", "ageSd", "pFemale", "hhMu", "hhSd",
+                        "sesMu", "sesSd", "regMu", "regSd", "motMu", "motSd"]
+
+# Gewichte wA/wG/wH/wS/wR/wM und Temperatur T des Naive-Bayes-Klassifikators
+# (segmentClassifier SCHRITT 3/4). wMotorisation=0.0 per Default (siehe
+# Aufgabenstellungs-HINWEIS: Motorisierung misst Haushalts-, carAvail
+# Personenebene) - 1.0 nur als Sensitivitaetslauf.
+CLASSIFIER_WEIGHTS = {
+    "classifierWeightAge": 1.0,
+    "classifierWeightGender": 1.0,
+    "classifierWeightHousehold": 1.0,
+    "classifierWeightIncome": 1.0,
+    "classifierWeightRegion": 1.0,
+    "classifierWeightMotorisation": 0.0,
+    "classifierTemperature": 1.0,
+}
 
 # ---------------------------------------------------------------------
 # Nicht aus der Excel: ASC/ascSd/costPerKm je Modus (bisheriger
@@ -317,11 +359,24 @@ def render_mode_param_set(mode, data):
 
 
 def render_segment_param_set(segment_id, probability, constructs, constructs_sd):
+    cluster = CLUSTER_PARAMS[segment_id]
+    cluster_name, cluster_pi = cluster[0], cluster[1]
+    if abs(cluster_pi - probability) > 1e-6:
+        raise ValueError(
+            f"pi aus Tab. 2-2 ({cluster_pi}) weicht fuer Segment '{segment_id}' von der "
+            f"probability aus der Segmentierungs-Excel ({probability}) ab - beide sollten "
+            f"zahlengleich sein (dieselbe Quellstudie).")
+    cluster_params = dict(zip(CLUSTER_PARAM_FIELDS, (cluster_name,) + cluster[2:]))
+    cluster_lines = "\n".join(
+        f'            <param name="{field}" value="{fmt(cluster_params[field]) if field != "displayName" else cluster_params[field]}"/>'
+        for field in CLUSTER_PARAM_FIELDS)
+
     return f"""        <parameterset type="segmentParams">
             <param name="segmentId" value="{segment_id}"/>
             <param name="probability" value="{fmt(probability)}"/>
             <param name="constructs" value="{render_map(ALL_CONSTRUCTS, constructs)}"/>
             <param name="constructsSd" value="{render_map(ALL_CONSTRUCTS, constructs_sd)}"/>
+{cluster_lines}
         </parameterset>"""
 
 
@@ -330,6 +385,8 @@ def render_module(abm_data, segments):
         render_segment_param_set(seg_id, prob, constructs, constructs_sd)
         for seg_id, prob, constructs, constructs_sd in segments)
     mode_blocks = "\n\n".join(render_mode_param_set(mode, abm_data) for mode in MODES)
+    classifier_weight_lines = "\n".join(
+        f'        <param name="{name}" value="{fmt(value)}"/>' for name, value in CLASSIFIER_WEIGHTS.items())
 
     return f"""    <!-- =========================================================================
          PARAMETER-SCHNITTSTELLE DES ADD-ONS
@@ -381,6 +438,14 @@ def render_module(abm_data, segments):
         <!-- Oberlausitz/Dresden liefert das Personenattribut "ptTicket" mit
              Werten "none"/"full" (~14% der Population "full") - siehe
              modeParams.costPerKmWithTicket-Javadoc fuer die Verwendung. -->
+{classifier_weight_lines}
+        <!-- Naive-Bayes-Segmentklassifikator (segmentClassifier): Gewichte
+             wA/wG/wH/wS/wR/wM und Temperatur T, siehe dortigen Klassen-Javadoc
+             SCHRITT 3/4. classifierWeightMotorisation=0.0 per Default (siehe
+             Aufgabenstellungs-HINWEIS: Motorisierung misst Haushalts-, carAvail
+             Personenebene) - 1.0 nur als Sensitivitaetslauf. Die Cluster-
+             zentren selbst (ageMu/.../motSd je Segment) stehen unten in den
+             segmentParams-Bloecken. -->
 
 {segment_blocks}
 
