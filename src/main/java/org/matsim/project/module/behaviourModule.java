@@ -19,6 +19,9 @@ import org.matsim.api.core.v01.Id;
 import org.matsim.api.core.v01.Scenario;
 import org.matsim.api.core.v01.network.Link;
 import org.matsim.api.core.v01.network.Network;
+import org.matsim.api.core.v01.population.Activity;
+import org.matsim.api.core.v01.population.Person;
+import org.matsim.api.core.v01.population.PlanElement;
 import org.matsim.contribs.discrete_mode_choice.modules.DiscreteModeChoiceConfigurator;
 import org.matsim.contribs.discrete_mode_choice.modules.DiscreteModeChoiceModule;
 import org.matsim.contribs.discrete_mode_choice.modules.EstimatorModule;
@@ -206,6 +209,55 @@ public final class behaviourModule extends AbstractModule {
                 scoringConfig.addModeParams(new ScoringConfigGroup.ModeParams(mode.getMatsimMode()));
             }
         }
+    }
+
+    /**
+     * Bugfix: DMC's ActivityTypeHomeFinder/ActivityTourFinder (beide Default-
+     * Komponenten, siehe configureController(...) oben) vergleichen NUR per
+     * exaktem equals() gegen die konfigurierten Aktivitaetstypen. Bei
+     * VSP-Konvention-Szenarien wie Oberlausitz/Dresden ("zweck_dauerInSekunden",
+     * z. B. "home_82200") matcht das konfigurierte, nackte
+     * cfg.getHomeActivityType() ("home") NIE - die Folge: DMC findet in keinem
+     * Trip eine Heimataktivitaet, ActivityTourFinder faellt fuer JEDEN Agenten
+     * auf "ganzer Tag = eine Tour" zurueck, statt an echten Heimwegen zu trennen
+     * (siehe ActivityTourFinder-Quelle: findActivities() liefert eine leere
+     * Menge, wenn kein Treffer). Dieselbe Ursache wie bei
+     * behaviourCandidateTripInserter/behaviourInducedDemandTripInserter
+     * (isHomeActivity(...) dort), hier aber fuer DMC selbst.
+     *
+     * Muss aus prepareScenario(...) aufgerufen werden (config-Phase in
+     * configureController(...) hat noch keine geladene Population, kennt also
+     * die tatsaechlich vorkommenden Aktivitaetstyp-STRINGS noch nicht) -
+     * ueberschreibt die dort gesetzten Platzhalter-Werte mit der vollstaendigen
+     * Menge der in der Population tatsaechlich vorkommenden konkreten Typen,
+     * deren Zweck (parseActivityType(...).purpose()) dem konfigurierten
+     * homeActivityType entspricht. Fuer Szenarien OHNE Suffix-Konvention (z. B.
+     * equil "h") liefert das exakt dieselbe Ein-Element-Menge wie vorher - kein
+     * Verhaltensunterschied dort.
+     */
+    public static void registerHomeActivityTypes(Scenario scenario) {
+        behaviourConfigGroup cfg = behaviourConfigGroup.getOrCreate(scenario.getConfig());
+        String homeType = cfg.getHomeActivityType();
+
+        Set<String> concreteHomeTypes = new LinkedHashSet<>();
+        for (Person person : scenario.getPopulation().getPersons().values()) {
+            for (PlanElement element : person.getSelectedPlan().getPlanElements()) {
+                if (element instanceof Activity activity
+                        && homeType.equals(parseActivityType(activity.getType()).purpose())) {
+                    concreteHomeTypes.add(activity.getType());
+                }
+            }
+        }
+
+        if (concreteHomeTypes.isEmpty()) {
+            throw new IllegalStateException("Kein Aktivitaetstyp mit Zweck '" + homeType
+                    + "' (behaviourConfigGroup.homeActivityType) in der Population gefunden - "
+                    + "DMC kann dann keine Heimataktivitaet identifizieren.");
+        }
+
+        DiscreteModeChoiceConfigGroup dmcConfig = DiscreteModeChoiceConfigGroup.getOrCreate(scenario.getConfig());
+        dmcConfig.getActivityHomeFinderConfigGroup().setActivityTypes(concreteHomeTypes);
+        dmcConfig.getActivityTourFinderConfigGroup().setActivityTypes(concreteHomeTypes);
     }
 
     /**
@@ -463,6 +515,37 @@ public final class behaviourModule extends AbstractModule {
         T group = factory.get();
         config.addModule(group);
         return group;
+    }
+
+    /**
+     * Zweck + typische Dauer eines Aktivitaetstyps, siehe {@link #parseActivityType(String)}.
+     *
+     * @param purpose               Zweck-Teil vor dem letzten "_" (z. B. "shop" aus "shop_1800").
+     *                              Ohne erkennbaren Zahlensuffix identisch zum vollen Typ.
+     * @param typicalDurationSeconds aus dem Suffix geparste Dauer in Sekunden, sonst 12 Stunden Default.
+     */
+    public record activityTypeInfo(String purpose, double typicalDurationSeconds) {
+    }
+
+    /**
+     * Zerlegt einen Aktivitaetstyp nach der VSP-ueblichen Konvention "zweck_dauerInSekunden"
+     * (z. B. "home_600", "shop_1800" - siehe RunOberlausitzDresdenTest.prepareScenario-Javadoc)
+     * in Zweck und typische Dauer. Wird sowohl fuer die dynamische activityParams-Registrierung
+     * (RunOberlausitzDresdenTest) als auch fuer registerHomeActivityTypes(...) oben genutzt -
+     * EINE Parsing-Stelle statt zwei, die sonst auseinanderlaufen koennten.
+     */
+    public static activityTypeInfo parseActivityType(String type) {
+        int underscore = type.lastIndexOf('_');
+        if (underscore < 0) {
+            return new activityTypeInfo(type, 12 * 3600.0);
+        }
+        try {
+            double typicalDurationSeconds = Double.parseDouble(type.substring(underscore + 1));
+            return new activityTypeInfo(type.substring(0, underscore), typicalDurationSeconds);
+        } catch (NumberFormatException e) {
+            // kein numerischer Suffix - ganzer String bleibt Zweck, Default-Dauer
+            return new activityTypeInfo(type, 12 * 3600.0);
+        }
     }
 
     @Override

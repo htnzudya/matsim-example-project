@@ -275,6 +275,14 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 		behaviourConfigGroup cfg = behaviourConfigGroup.getOrCreate(scenario.getConfig());
 		assignSegments(scenario, cfg);
 
+		// Bugfix (siehe behaviourModule.registerHomeActivityTypes-Javadoc): DMCs
+		// ActivityTypeHomeFinder/ActivityTourFinder matchen NUR exakt gegen den
+		// konfigurierten homeActivityType ("home") - Oberlausitz/Dresdens
+		// tatsaechliche Aktivitaetstypen heissen aber "home_<dauer>" (VSP-
+		// Konvention). Ohne diesen Aufruf findet DMC in KEINEM Trip eine
+		// Heimataktivitaet und behandelt jeden Agententag als eine einzige Tour.
+		behaviourModule.registerHomeActivityTypes(scenario);
+
 		// Schritt 7 (Netzwerkrouting): AV auf denselben Links wie CA erlauben,
 		// damit es echtes, kongestionsabhaengiges Routing auf dem echten
 		// Strassennetz statt Teleport nutzt.
