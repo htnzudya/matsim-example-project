@@ -371,14 +371,6 @@ def render_module(abm_data, segments):
         <!-- Oberlausitz/Dresden liefert das Personenattribut "ptTicket" mit
              Werten "none"/"full" (~14% der Population "full") - siehe
              modeParams.costPerKmWithTicket-Javadoc fuer die Verwendung. -->
-        <param name="theta" value="0.2"/>
-        <param name="tripShare" value="0.5"/>
-        <!-- theta: Personenkilometer-Multiplikator je Logsum-Einheit fuer
-             induzierte Nachfrage (Gesamteffekt). tripShare: Anteil davon
-             (0..1), der auf mehr Wege entfaellt statt auf laengere Wege -
-             T_ind * D_ind = VKM_ind, keine Doppelzaehlung. Beide PLATZHALTER
-             (theta=+20%, tripShare=haelftig), noch nicht aus eigenen
-             AV-Welt-Ergebnissen kalibriert - wird spaeter aktualisiert. -->
 
 {segment_blocks}
 
