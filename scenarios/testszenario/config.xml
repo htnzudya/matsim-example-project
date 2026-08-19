@@ -38,15 +38,24 @@
         <param name="scaleParameter" value="1.0"/>
         <param name="randomSeed" value="4711"/>
         <param name="segmentAttribute" value="segment"/>
-        <param name="ascNull" value="0.0"/>
+        <param name="ascNull" value="1.12"/>
         <!-- Nullalternative im DCM (siehe behaviourCandidateTripInserter):
-             ascNull ist PLATZHALTER 0.0 - zu kalibrieren, bis die simulierte
-             Wegerate/Person/Tag im Basisszenario die erhobene Wegerate trifft,
-             danach fuer das AVM-Szenario fixiert. NICHT aus den Excel-Dateien,
-             hier als Konstante gepflegt (wie scaleParameter/randomSeed/
+             ascNull kalibriert auf eine Zusatzweg-Einfuegequote von ~4% der
+             Agenten (Studienvorgabe: Verkehr durch AVM-Verfuegbarkeit nur um
+             ~4% erhoeht) - empirisch iterativ ermittelt (0.0 -> 8.0% Quote,
+             0.73 -> 5.1%, 1.12 -> 3.96%, siehe Git-History), nicht analytisch
+             herleitbar wegen Mixed-Logit-Heterogenitaet (Softmax ueber
+             heterogene Agentenpopulation ist nicht log-linear in ascNull).
+             Bei Aenderungen an anderen modeParams/segmentParams-Werten oder an
+             der Population MUSS neu kalibriert werden (siehe
+             behaviourCandidateTripInserter-Lognachricht "X/Y Agenten mit
+             Kandidatenweg eingefuegt" - Y ist die Gesamtpopulation, X/Y sollte
+             wieder ~4% ergeben). NICHT aus den Excel-Dateien, hier als
+             Konstante gepflegt (wie scaleParameter/randomSeed/
              segmentAttribute). Der Zweck des Kandidatenwegs wird zufaellig aus
-             allen Nicht-Heim-Aktivitaeten der Population gezogen, braucht
-             daher keine eigene Zweck-Taxonomie-Konfiguration. -->
+             allen Nicht-Heim-Aktivitaeten der Population gezogen (ausser
+             Arbeit/Bildung), braucht daher keine eigene Zweck-Taxonomie-
+             Konfiguration. -->
         <param name="ticketAttribute" value="ptTicket"/>
         <param name="ticketOwnedValue" value="full"/>
         <!-- Oberlausitz/Dresden liefert das Personenattribut "ptTicket" mit

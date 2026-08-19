@@ -10,6 +10,7 @@ import java.util.Random;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.matsim.api.core.v01.Id;
 import org.matsim.api.core.v01.population.Activity;
 import org.matsim.api.core.v01.population.Leg;
 import org.matsim.api.core.v01.population.Person;
@@ -33,6 +34,10 @@ import org.matsim.project.model.behaviourUtilityFunction;
 import org.matsim.project.model.modeParams;
 import org.matsim.project.scoring.tripContextBuilder;
 import org.matsim.utils.objectattributes.attributable.AttributesImpl;
+import org.matsim.vehicles.Vehicle;
+import org.matsim.vehicles.VehicleType;
+import org.matsim.vehicles.VehicleUtils;
+import org.matsim.vehicles.Vehicles;
 
 import com.google.inject.Inject;
 
@@ -83,11 +88,12 @@ import com.google.inject.Inject;
  *    eindeutig auf das unterschiedliche Choice-Set zurueckfuehren.
  *
  *  - ASC_0 kommt als einziger neuer Skalar aus der Config (verhaltensmodell.
- *    ascNull, siehe behaviourConfigGroup) - zu kalibrieren, bis die
- *    simulierte Wegerate/Person/Tag im Basisszenario die erhobene Wegerate
- *    trifft, danach fuer das AVM-Szenario fixiert. Dieses Add-on kalibriert
- *    NICHT selbst (kein Kalibrierungslauf hier) - das ist Aufgabe des
- *    Nutzers ueber die Config.
+ *    ascNull, siehe behaviourConfigGroup) - kalibriert auf eine Zusatzweg-
+ *    Einfuegequote von ~4% der Population (Studienvorgabe, siehe dortigen
+ *    XML-Kommentar in scenarios/testszenario/config.xml fuer die konkreten
+ *    Messpunkte). Dieses Add-on kalibriert NICHT selbst (kein Kalibrierungslauf
+ *    hier) - das ist Aufgabe des Nutzers ueber die Config, ablesbar an der
+ *    "X/Y Agenten mit Kandidatenweg eingefuegt"-Lognachricht unten.
  *
  *  - Kandidatenweg-Attribute (Zweck, Ziel/Distanz, Startzeit, Dauer) werden
  *    NICHT unabhaengig gezogen, sondern als EIN gemeinsamer, real
@@ -116,17 +122,25 @@ import com.google.inject.Inject;
  *    behaviourUtilityEstimator, wo Distanz ebenfalls aus dem gerouteten Trip
  *    kommt statt aus einer eigenen Verteilung.
  *
- *  - Einfuegepunkt (ERSTE VERSION, bewusst eingeschraenkt statt riskant
- *    generisch): der Kandidatenweg wird als Hin-und-zurueck-Ausflug AN DAS
- *    ENDE DES TAGES angehaengt, d. h. NUR wenn die letzte Aktivitaet des
- *    Plans die Heimataktivitaet ist (cfg.getHomeActivityType()) - das deckt
- *    den ueblichen Fall (Tag endet zuhause) UND 0-Wege-Agenten (deren Plan
- *    aus genau einer, offenen Heimaktivitaet besteht) direkt ab, ohne
- *    bestehende, bereits terminierte Legs mitten im Tag zeitlich verschieben
- *    zu muessen (das wuerde bestehende Zeitfenster/Routen invalidieren).
- *    Endet der Tag NICHT zuhause, wird der Agent uebersprungen (gezaehlt,
- *    siehe Log-Zusammenfassung) - ein spaeterer Ausbauschritt koennte
- *    stattdessen mitten in eine passende Heimaktivitaet spleissen.
+ *  - Einfuegepunkt (ZWEITE VERSION - Auftraggeber-Feedback "Zusatzwege duerfen
+ *    nicht ausnahmslos abends stattfinden, das ist nicht realistisch"): der
+ *    Kandidatenweg wird NICHT mehr zwingend ans Tagesende gehaengt, sondern an
+ *    die erste Stelle der BESTEHENDEN Wegekette des Agenten, an der er laut
+ *    Plan tatsaechlich frei ist - siehe findInsertionBoundary(...). Ist der
+ *    Agent zur gewuenschten Uhrzeit noch in einer laufenden Aktivitaet (z. B.
+ *    Arbeit), IST deren end_time automatisch der naechste freie Zeitpunkt -
+ *    kein Sonderfall fuer "Arbeit" noetig, das gilt fuer jede Aktivitaet
+ *    gleichermassen. Der Rest der Wegekette (alles nach dem Einfuegepunkt)
+ *    bleibt inhaltlich unveraendert und verschiebt sich nur um die Dauer des
+ *    Zusatzwegs nach hinten (siehe insertCandidateTrip-Javadoc) - dieselbe
+ *    ABSOLUT gesetzte end_time-Kette wie im Original, nur um duration
+ *    versetzt. Als Vorlagen-Zweck sind "work" und alle "educ_*"-Zwecke
+ *    ausgeschlossen (siehe collectTemplates-Javadoc) - ein Zusatzweg soll
+ *    keine Pflichttermine wie Arbeit/Schule simulieren.
+ *    Nebeneffekt: "Tag endet nicht zuhause" ist damit KEIN Ausschlussgrund
+ *    mehr - jede Wegekette hat mindestens eine (die letzte, offene)
+ *    Aktivitaet als gueltigen Fallback-Ankerpunkt, das deckt weiterhin auch
+ *    0-Wege-Agenten ab.
  *
  *  - Die neuen Legs werden UNGEROUTET eingefuegt (nur Modus + Abfahrtszeit) -
  *    MATSims PrepareForSim/PersonPrepareForSim routet sie automatisch vor
@@ -169,11 +183,12 @@ public final class behaviourCandidateTripInserter implements StartupListener {
     private final behaviourUtilityFunction utilityFunction;
     private final behaviourModeAvailability modeAvailability;
     private final behaviourConfigGroup cfg;
+    private final Vehicles vehicles;
 
     @Inject
     public behaviourCandidateTripInserter(Population population, ActivityFacilities facilities,
             TripRouter tripRouter, TimeInterpretation timeInterpretation, behaviourUtilityFunction utilityFunction,
-            behaviourModeAvailability modeAvailability, behaviourConfigGroup cfg) {
+            behaviourModeAvailability modeAvailability, behaviourConfigGroup cfg, Vehicles vehicles) {
         this.population = population;
         this.facilities = facilities;
         this.tripRouter = tripRouter;
@@ -181,6 +196,39 @@ public final class behaviourCandidateTripInserter implements StartupListener {
         this.utilityFunction = utilityFunction;
         this.modeAvailability = modeAvailability;
         this.cfg = cfg;
+        this.vehicles = vehicles;
+    }
+
+    /**
+     * Legt bei Bedarf die Fahrzeug-ID + das Vehicle-Objekt fuer mode/person an -
+     * siehe Aufrufstelle in notifyStartup fuer die Begruendung (CA/AV brauchen
+     * das fuer netzwerkbasiertes Routing, sonst scheitert tripRouter.calcRoute
+     * IMMER mit "Could not retrieve vehicle id from person"). Repliziert exakt
+     * PrepareForSimImpl.createAndAddVehiclesForEveryNetworkMode(): Id ueber
+     * VehicleUtils.createVehicleId(...) (identische Namenskonvention, sonst
+     * wuerde PersonPrepareForSim spaeter eine ZWEITE, andere ID vergeben),
+     * Vehicle-Instanz ueber Vehicles.getFactory().createVehicle(...) + addVehicle(...)
+     * (uebersprungen, falls schon vorhanden), Zuordnung ueber
+     * VehicleUtils.insertVehicleIdsIntoPersonAttributes(...). Setzt voraus, dass
+     * bereits ein VehicleType mit Id.create(mode, VehicleType.class) registriert
+     * ist (siehe behaviourModule.addVehicleTypesForModes, laeuft in
+     * prepareScenario VOR notifyStartup) - sonst No-Op (Szenario nutzt dann
+     * vermutlich defaultVehicle statt modeVehicleTypesFromVehiclesData, siehe
+     * dortigen Javadoc).
+     */
+    private void ensureVehicleId(Person person, String mode) {
+        if (VehicleUtils.hasVehicleId(person, mode)) {
+            return;
+        }
+        VehicleType type = vehicles.getVehicleTypes().get(Id.create(mode, VehicleType.class));
+        if (type == null) {
+            return;
+        }
+        Id<Vehicle> vehicleId = VehicleUtils.createVehicleId(person, mode);
+        if (!vehicles.getVehicles().containsKey(vehicleId)) {
+            vehicles.addVehicle(vehicles.getFactory().createVehicle(vehicleId, type));
+        }
+        VehicleUtils.insertVehicleIdsIntoPersonAttributes(person, Map.of(mode, vehicleId));
     }
 
     /** Ein aus der Population gezogener, real existierender diskretionaerer Weg als Kandidatenweg-Vorlage. */
@@ -222,7 +270,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                 + templatesBySegment.size() + " Segmenten gesammelt (zufaellig aus allen "
                 + "Nicht-Heim-Aktivitaeten der Population, keine Zweck-Einschraenkung).");
 
-        int total = 0, inserted = 0, skippedNotHomeEnd = 0, skippedNoTemplate = 0,
+        int total = 0, inserted = 0, skippedNoTemplate = 0, skippedNoFreeSlot = 0,
                 skippedNoModeAvailable = 0, skippedNullChosen = 0;
 
         for (Person person : population.getPersons().values()) {
@@ -230,12 +278,6 @@ public final class behaviourCandidateTripInserter implements StartupListener {
 
             Plan plan = person.getSelectedPlan();
             List<PlanElement> elements = plan.getPlanElements();
-            int lastIndex = elements.size() - 1;
-            if (!(elements.get(lastIndex) instanceof Activity lastActivity) || !isHomeActivity(lastActivity.getType(), homeType)) {
-                skippedNotHomeEnd++;
-                person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:notHomeEnd");
-                continue;
-            }
 
             List<candidateTripTemplate> pool = resolveTemplatePool(person, segmentAttribute, templatesBySegment, allTemplates);
             if (pool.isEmpty()) {
@@ -253,12 +295,28 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                 person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noTemplate");
                 continue;
             }
-            double candidateStart = Math.max(0.0, Math.min(template.startTimeSeconds(), END_OF_DAY_SECONDS - duration));
+
+            insertionPoint boundary = findInsertionBoundary(elements, template.startTimeSeconds());
+            if (boundary == null) {
+                // Restlicher Tag komplett durch Arbeit/Bildung blockiert - inkl. Sonderfall
+                // "letzte, offene Aktivitaet ist selbst Arbeit/Bildung" (siehe
+                // findInsertionBoundary-Javadoc). Kein freier Zeitpunkt fuer einen Zusatzweg.
+                skippedNoFreeSlot++;
+                person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noFreeSlot");
+                continue;
+            }
+            Activity boundaryActivity = boundary.activity();
+            double candidateStart = boundary.candidateStart();
+            if (candidateStart + duration >= END_OF_DAY_SECONDS) {
+                skippedNoTemplate++;
+                person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noTemplate");
+                continue;
+            }
 
             agentProfile profile = resolveProfile(person, segmentAttribute, segmentsById)
                     .draw(new Random(tripContextBuilder.personSeed(randomSeed, person.getId(), "profile")));
 
-            Facility originFacility = FacilitiesUtils.toFacility(lastActivity, facilities);
+            Facility originFacility = FacilitiesUtils.toFacility(boundaryActivity, facilities);
             Activity destinationActivity = copyLocationAs(template.sourceActivity(), template.sourceActivity().getType());
             Facility destinationFacility = FacilitiesUtils.toFacility(destinationActivity, facilities);
 
@@ -270,6 +328,22 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                 if (!availableModes.contains(alternative.getMatsimMode())) {
                     continue;
                 }
+                // Bugfix: CA/AV brauchen fuer netzwerkbasiertes Routing eine Fahrzeug-ID je
+                // Person (VehicleUtils.getVehicleId(...)) - die legt MATSim normalerweise erst
+                // in PersonPrepareForSim an, das NACH allen notifyStartup-Listenern laeuft
+                // (siehe Klassen-Javadoc). Ohne diesen Vorgriff scheitert JEDES CA/AV-Routing
+                // hier IMMER mit "Could not retrieve vehicle id from person" - unabhaengig von
+                // Distanz/Nutzenwerten. ensureVehicleId(...) legt sie bei Bedarf schon jetzt an,
+                // exakt nach demselben Verfahren wie PrepareForSimImpl.
+                // createAndAddVehiclesForEveryNetworkMode() (Id ueber VehicleUtils.
+                // createVehicleId, Vehicle-Instanz ueber Vehicles.createAndAddVehicleIfNecessary,
+                // Zuordnung ueber VehicleUtils.insertVehicleIdsIntoPersonAttributes) - spaeter
+                // findet PersonPrepareForSim dann bereits eine bestehende ID vor und legt keine
+                // zweite an (siehe dortiges hasVehicleId-Guard).
+                if (alternative == alternatives.CA || alternative == alternatives.AV) {
+                    ensureVehicleId(person, alternative.getMatsimMode());
+                }
+
                 modeParams meanParams = modeParamsByAlternative.get(alternative);
                 modeParams params = meanParams.draw(
                         new Random(tripContextBuilder.personSeed(randomSeed, person.getId(), alternative.name())));
@@ -309,41 +383,144 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                 continue;
             }
 
-            insertCandidateTrip(plan, lastIndex, lastActivity, chosen.get().getMatsimMode(),
-                    destinationActivity, candidateStart, duration, homeType);
+            insertCandidateTrip(plan, boundary.index(), boundaryActivity, boundary.appendAtDayEnd(),
+                    chosen.get().getMatsimMode(), destinationActivity, candidateStart, duration);
             person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "inserted:" + chosen.get().getMatsimMode());
             inserted++;
         }
 
         log.info(String.format(
                 "Nullalternative: %d/%d Agenten mit Kandidatenweg eingefuegt "
-                        + "(Nullalternative gewaehlt: %d, Tag endet nicht zuhause: %d, "
+                        + "(Nullalternative gewaehlt: %d, kein freier Zeitpunkt (Arbeit/Bildung): %d, "
                         + "keine Vorlage: %d, kein Modus verfuegbar/routbar: %d).",
-                inserted, total, skippedNullChosen, skippedNotHomeEnd, skippedNoTemplate, skippedNoModeAvailable));
+                inserted, total, skippedNullChosen, skippedNoFreeSlot, skippedNoTemplate, skippedNoModeAvailable));
     }
 
     /**
-     * Fuegt den Kandidatenweg als Hin-und-zurueck-Ausflug ans Ende des Tages
-     * an, siehe Klassen-Javadoc "Einfuegepunkt". lastActivity wird verkuerzt
-     * (endTime = candidateStart), danach folgen Leg -> Kandidatenaktivitaet ->
-     * Leg -> neue, offene Heimaktivitaet (Kopie derselben Position wie
-     * lastActivity).
+     * Ein moeglicher Einfuegepunkt fuer den Zusatzweg: die zu splittende
+     * bestehende Aktivitaet des Agenten, der tatsaechliche Startzeitpunkt (kann
+     * spaeter als die urspruengliche Wunschzeit der Vorlage liegen, siehe
+     * findInsertionBoundary-Javadoc) sowie ob es sich um die letzte, offene
+     * Aktivitaet des Tages handelt (appendAtDayEnd) - STRUKTURELL anhand der
+     * Position im Plan bestimmt, NICHT anhand von activity.getEndTime()
+     * (Bugfix, siehe findInsertionBoundary-Javadoc "Nicht-letzte Aktivitaet
+     * ohne end_time").
      */
-    private static void insertCandidateTrip(Plan plan, int lastIndex, Activity lastActivity, String mode,
-            Activity destinationActivity, double candidateStart, double duration, String homeType) {
+    private record insertionPoint(int index, Activity activity, double candidateStart, boolean appendAtDayEnd) {
+    }
 
-        lastActivity.setEndTime(candidateStart);
+    /**
+     * Arbeit/Bildung duerfen weder als Vorlagen-Zweck gezogen (siehe
+     * collectTemplates) noch als laufende Aktivitaet fuer einen Zusatzweg
+     * unterbrochen werden (siehe findInsertionBoundary) - unrealistisch, waehrend
+     * eines Pflichttermins spontan einen Zusatzweg zu unternehmen. Jede andere
+     * Aktivitaet (Freizeit, zuhause, Einkauf, Besuch, ...) darf dagegen
+     * unterbrochen werden.
+     */
+    private static boolean isBlockingPurpose(String activityType) {
+        String purpose = behaviourModule.parseActivityType(activityType).purpose();
+        return "work".equals(purpose) || purpose.startsWith("educ");
+    }
+
+    /**
+     * Sucht den fruehesten Zeitpunkt ab der gewuenschten Startzeit der Vorlage,
+     * an dem der Zusatzweg in die BESTEHENDE Wegekette des Agenten passt -
+     * Auftraggeber-Feedback "Zusatzwege duerfen nicht ausnahmslos abends
+     * stattfinden, das ist nicht realistisch, ABER waehrend Arbeit/Bildung darf
+     * er nicht stattfinden".
+     *
+     * Laeuft die Wegekette chronologisch durch: faellt die (ggf. bereits nach
+     * hinten verschobene) Wunschzeit in eine Arbeits-/Bildungsaktivitaet
+     * (isBlockingPurpose), wird auf deren end_time verschoben und mit der
+     * naechsten Aktivitaet weitergeprueft. Faellt sie dagegen in JEDE ANDERE
+     * Aktivitaet (auch mitten hinein, nicht nur in die Luecke danach), wird
+     * genau dort gesplittet - siehe insertCandidateTrip.
+     *
+     * Nicht-letzte Aktivitaeten OHNE end_time (z. B. dauer-/max_dur-basiert
+     * statt uhrzeit-basiert getaktet, oder - sollte der Plan zu diesem
+     * fruehen Zeitpunkt bereits welche enthalten - Stage-/Interaktions-
+     * aktivitaeten) werden uebersprungen, NIEMALS als Ankerpunkt gewaehlt:
+     * es gibt dafuer keinen verlaesslichen Referenzzeitpunkt, um danach eine
+     * zeitlich gueltige Rueckkehr-Aktivitaet zu bauen. Bugfix - vorher wurde
+     * so eine Aktivitaet wie die (einzig erlaubte) letzte, offene Aktivitaet
+     * behandelt, was mitten im Plan eine zweite "offene" Aktivitaet erzeugte
+     * und MATSims Router beim ersten Routing mit "NoSuchElementException:
+     * Undefined time" abstuerzen liess.
+     *
+     * @return die zu splittende Aktivitaet + tatsaechlicher Startzeitpunkt,
+     *         oder null, wenn der GESAMTE restliche Tag durch Arbeit/Bildung
+     *         blockiert ist (inkl. Sonderfall: die letzte, offene Aktivitaet
+     *         ist selbst Arbeit/Bildung - dann gibt es keinen Fallback mehr).
+     */
+    private static insertionPoint findInsertionBoundary(List<PlanElement> elements, double desiredStartSeconds) {
+        double earliestPossible = desiredStartSeconds;
+        int lastIndex = elements.size() - 1;
+        for (int i = 0; i < elements.size(); i += 2) {
+            if (!(elements.get(i) instanceof Activity activity)) {
+                continue; // strukturell nicht erreichbar, Plaene wechseln strikt Activity/Leg/Activity/...
+            }
+            boolean isLast = (i == lastIndex);
+            boolean blocking = isBlockingPurpose(activity.getType());
+            if (isLast) {
+                return blocking ? null : new insertionPoint(i, activity, Math.max(0.0, earliestPossible), true);
+            }
+            if (activity.getEndTime().isUndefined()) {
+                continue; // siehe Methoden-Javadoc - kein verlaesslicher Referenzzeitpunkt, ueberspringen
+            }
+            double thisEnd = activity.getEndTime().seconds();
+            if (earliestPossible < thisEnd) {
+                if (!blocking) {
+                    return new insertionPoint(i, activity, Math.max(0.0, earliestPossible), false);
+                }
+                earliestPossible = thisEnd; // Arbeit/Bildung blockiert - fruehestens danach moeglich
+            }
+        }
+        return null; // durch isLast oben unerreichbar, defensiv
+    }
+
+    /**
+     * Splittet boundaryActivity bei candidateStart: der bestehende Teil endet
+     * hier (statt ggf. erst spaeter oder gar nicht), danach folgen Leg ->
+     * Kandidatenaktivitaet -> Leg -> Rueckkehr-Kopie von boundaryActivity
+     * (gleicher Typ/Ort - der Agent setzt fort, was er vorher tat, statt
+     * zwingend nachhause zurueckzukehren).
+     *
+     * War boundaryActivity die letzte, OFFENE Aktivitaet des Tages, bleibt die
+     * Rueckkehr-Kopie ebenfalls offen (Tagesende, wie zuvor). Hatte sie dagegen
+     * bereits eine feste end_time, behaelt die Kopie GENAU DIESE end_time -
+     * der Rest des Tages bleibt inhaltlich unveraendert; reicht die Luecke bis
+     * dahin nicht fuer die volle Zusatzweg-Dauer, verschiebt sich nur der
+     * Ueberhang (max(...)) nach hinten, nicht der gesamte Resttag.
+     */
+    private static void insertCandidateTrip(Plan plan, int boundaryIndex, Activity boundaryActivity,
+            boolean appendAtDayEnd, String mode, Activity destinationActivity, double candidateStart, double duration) {
+
+        // originalEnd VOR dem Kuerzen sichern - appendAtDayEnd kommt strukturell (Position im
+        // Plan) aus findInsertionBoundary, NICHT aus getEndTime().isUndefined() (Bugfix, siehe
+        // dortigen Javadoc) - boundaryActivity kann daher hier auch im Nicht-Tagesende-Fall
+        // sicher als "hatte eine definierte end_time" behandelt werden.
+        double originalEnd = appendAtDayEnd ? Double.NaN : boundaryActivity.getEndTime().seconds();
+
+        boundaryActivity.setEndTime(candidateStart);
 
         Leg outboundLeg = PopulationUtils.createLeg(mode);
         outboundLeg.setDepartureTime(candidateStart);
         destinationActivity.setEndTime(candidateStart + duration);
-        PopulationUtils.insertLegAct(plan, lastIndex + 1, outboundLeg, destinationActivity);
+        PopulationUtils.insertLegAct(plan, boundaryIndex + 1, outboundLeg, destinationActivity);
 
         Leg inboundLeg = PopulationUtils.createLeg(mode);
         inboundLeg.setDepartureTime(candidateStart + duration);
-        Activity homeAgain = copyLocationAs(lastActivity, homeType);
-        // homeAgain bleibt bewusst offen (kein setEndTime) - letzte Aktivitaet des Tages.
-        PopulationUtils.insertLegAct(plan, lastIndex + 3, inboundLeg, homeAgain);
+        // Bugfix (galt urspruenglich fuer den Tagesende-Sonderfall, gilt hier analog fuer
+        // jede Rueckkehr-Kopie): der ABSTRAKTE homeType ("home") ist bei VSP-Konvention-
+        // Szenarien nie als konkreter Aktivitaetstyp in den Scoring-Parametern registriert
+        // (nur "home_<dauer>") - boundaryActivity.getType() ist dagegen der KONKRETE Typ,
+        // unter dem die Aktivitaet bereits registriert ist.
+        Activity returnActivity = copyLocationAs(boundaryActivity, boundaryActivity.getType());
+        if (!appendAtDayEnd) {
+            returnActivity.setEndTime(Math.max(originalEnd, candidateStart + duration));
+        }
+        // sonst: returnActivity bleibt offen (kein setEndTime) - letzte Aktivitaet des Tages.
+        PopulationUtils.insertLegAct(plan, boundaryIndex + 3, inboundLeg, returnActivity);
     }
 
     private static Activity copyLocationAs(Activity source, String type) {
@@ -380,13 +557,12 @@ public final class behaviourCandidateTripInserter implements StartupListener {
      * gruppiert nach dem Segment DES BEITRAGENDEN AGENTEN. "Vergleichbare
      * Agenten" = gleiches Segment, siehe Klassen-Javadoc.
      *
-     * KEINE Zweck-Einschraenkung (z. B. auf diskretionaere Zwecke): der Zweck
-     * wird zufaellig aus allen tatsaechlich vorkommenden Nicht-Heim-Aktivitaeten
+     * Zweck-Einschraenkung: Arbeit und alle Bildungszwecke (educ_*) sind
+     * ausgeschlossen (isBlockingPurpose) - ein spontaner Zusatzweg soll keinen
+     * Pflichttermin wie Arbeit/Schule simulieren. Sonst wird der Zweck
+     * zufaellig aus allen tatsaechlich vorkommenden Nicht-Heim-Aktivitaeten
      * gezogen (Auftraggeber-Vorgabe "einfach immer random zuweisen" statt
-     * einer manuell zu pflegenden Zweck-Taxonomie je Szenario). Das weicht von
-     * der urspruenglichen Spezifikation ("nur diskretionaere Zwecke, kein
-     * Pflichtweg") bewusst ab - ein Kandidatenweg kann dadurch auch einen
-     * Pflichtzweck (z. B. Arbeit) ziehen.
+     * einer manuell zu pflegenden Zweck-Taxonomie je Szenario).
      */
     private Map<String, List<candidateTripTemplate>> collectTemplates(String homeType, String segmentAttribute) {
         Map<String, List<candidateTripTemplate>> result = new LinkedHashMap<>();
@@ -401,15 +577,25 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             List<PlanElement> elements = person.getSelectedPlan().getPlanElements();
             for (int i = 1; i < elements.size(); i++) {
                 if (!(elements.get(i) instanceof Activity activity) || isHomeActivity(activity.getType(), homeType)
+                        || isBlockingPurpose(activity.getType())
                         || TripStructureUtils.isStageActivityType(activity.getType())) {
                     continue;
                 }
-                if (!(elements.get(i - 1) instanceof Leg precedingLeg) || precedingLeg.getDepartureTime().isUndefined()) {
+                // Bugfix: bei frisch geladenen (noch ungerouteten) Plaenen ist
+                // Leg.getDepartureTime() IMMER UNDEFINED - die Abfahrtszeit steckt zu diesem
+                // Zeitpunkt nur in der end_time der VORAUSGEHENDEN Aktivitaet (elements.get(i-2),
+                // durch die Plan-Struktur Activity/Leg/Activity/... immer eine Activity, sobald
+                // elements.get(i) selbst eine Activity ist). Ein reiner precedingLeg.getDepartureTime()-
+                // Check verwarf dadurch AUSNAHMSLOS jede Kandidatenaktivitaet (0 Vorlagen aus 0
+                // Segmenten in echten Laeufen), nicht nur bei fehlender Zeitangabe.
+                if (!(elements.get(i - 1) instanceof Leg) || i < 2
+                        || !(elements.get(i - 2) instanceof Activity originActivity)
+                        || originActivity.getEndTime().isUndefined()) {
                     continue;
                 }
                 double typicalDuration = behaviourModule.parseActivityType(activity.getType()).typicalDurationSeconds();
                 candidateTripTemplate template = new candidateTripTemplate(
-                        activity, precedingLeg.getDepartureTime().seconds(), typicalDuration);
+                        activity, originActivity.getEndTime().seconds(), typicalDuration);
                 result.computeIfAbsent(segmentId, k -> new ArrayList<>()).add(template);
             }
         }
