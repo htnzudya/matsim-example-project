@@ -163,25 +163,6 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 
 		new ConfigReader(config).readFile("scenarios/testszenario/config.xml");
 
-		// Basis-vs-AVM-Vergleich (siehe behaviourConfigGroup.avmModesEnabled-Javadoc,
-		// Abschnitt "Latente Nachfrage" der Auftraggeber-Spezifikation, Gl.
-		// \ref{eq:latent}): ueber die Umgebungsvariable AVM_MODES_ENABLED=false
-		// aktivierter "Basis"-Lauf ohne AV/PSAV/SSAV im Choice-Set - alles andere
-		// (Population, randomSeed, ascNull, Kandidatenweg-Vorlagen) bleibt
-		// identisch zum AVM-Lauf, sonst waere eine Differenz der
-		// nullAlternativeOutcome-Indikatoren nicht mehr eindeutig auf das
-		// erweiterte Choice-Set zurueckzufuehren. outputDirectory bekommt
-		// automatisch das Suffix "-basis" angehaengt, damit beide Laeufe sich
-		// nicht gegenseitig ueberschreiben - siehe
-		// scripts/run-oberlausitz-dresden-basis.sh.
-		if ("false".equalsIgnoreCase(System.getenv("AVM_MODES_ENABLED"))) {
-			behaviourConfigGroup.getOrCreate(config).setAvmModesEnabled(false);
-			String outputDirectory = config.controller().getOutputDirectory().replaceAll("/+$", "") + "-basis";
-			config.controller().setOutputDirectory(outputDirectory);
-			log.info("Basislauf (AVM_MODES_ENABLED=false): AV/PSAV/SSAV aus dem Choice-Set entfernt, "
-					+ "outputDirectory -> " + outputDirectory);
-		}
-
 		// Schritt 15 (Bugfix): travelTimeMatrixCachePath (siehe oberlausitz-dresden/
 		// config.xml) an die geladene Population koppeln - sonst wirft
 		// FreeSpeedTravelTimeMatrix.<init> eine VerifyException ("numberOfZones ==

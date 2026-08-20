@@ -5,7 +5,6 @@ import java.util.Collection;
 import java.util.stream.Collectors;
 
 import org.matsim.contribs.discrete_mode_choice.modules.AbstractDiscreteModeChoiceExtension;
-import org.matsim.project.config.behaviourConfigGroup;
 import org.matsim.project.model.alternatives;
 import org.matsim.project.scoring.behaviourUtilityEstimator;
 
@@ -31,20 +30,15 @@ public final class behaviourDiscreteModeChoiceExtension extends AbstractDiscrete
     }
 
     /**
-     * Die fuenf Alternativen des Addons (siehe alternatives.java) sind die
-     * Grundmenge der verfuegbaren Modi, eingeschraenkt auf CA/PT, wenn
-     * verhaltensmodell.avmModesEnabled=false gesetzt ist (Basislauf des
-     * Basis-vs-AVM-Vergleichs, siehe behaviourConfigGroup.avmModesEnabled-
-     * Javadoc). behaviourModeAvailability filtert daraus zusaetzlich je Person
-     * CA/AV nach Fuehrerschein/Fahrzeugzugang heraus.
+     * Die vier Alternativen des Addons (siehe alternatives.java) sind die
+     * Grundmenge der verfuegbaren Modi - das ist die feste Identitaet des
+     * Add-ons, nicht szenarienabhaengig konfigurierbar. behaviourModeAvailability
+     * filtert daraus je Person CA/AV nach Fuehrerschein/Fahrzeugzugang heraus.
      */
     @Provides
     @Singleton
-    public behaviourModeAvailability provideModeAvailability(behaviourConfigGroup cfg) {
-        boolean avmModesEnabled = cfg.getAvmModesEnabled();
+    public behaviourModeAvailability provideModeAvailability() {
         Collection<String> modes = Arrays.stream(alternatives.values())
-                .filter(alternative -> avmModesEnabled
-                        || alternative == alternatives.CA || alternative == alternatives.PT)
                 .map(alternatives::getMatsimMode)
                 .collect(Collectors.toSet());
         return new behaviourModeAvailability(modes);
