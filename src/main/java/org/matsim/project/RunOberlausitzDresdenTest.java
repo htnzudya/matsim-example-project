@@ -115,8 +115,66 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 		super();
 	}
 
+	private static final String CONFIG_PATH = "scenarios/oberlausitz-dresden/config.xml";
+
+	/**
+	 * System-Property (NICHT Umgebungsvariable - die waere fuer beide
+	 * Sequenz-Laeufe in main() identisch, siehe dortigen Javadoc), ueber die
+	 * prepareConfig(...) zwischen Basis- und AVM-Lauf umschaltet.
+	 */
+	private static final String AVM_MODES_ENABLED_PROPERTY = "avmModesEnabled";
+
+	/**
+	 * Von prepareConfig(...) am Ende gesetzt - main() liest das jeweils
+	 * resultierende outputDirectory hier ab (inkl. "-basis"-Suffix beim
+	 * Basislauf), um es an compute_latent_demand.py durchzureichen.
+	 */
+	private static volatile String lastOutputDirectory;
+
+	/**
+	 * Basis-vs-AVM-Vergleich (Abschnitt "Latente Nachfrage" der Auftraggeber-
+	 * Spezifikation, Gl. \ref{eq:latent}) GEHOERT zur Nullalternative-Methodik,
+	 * nicht ein optionales Extra-Skript - deshalb hier als fester Teil des
+	 * Hauptlaufs: zwei vollstaendige, aufeinanderfolgende Controler-Laeufe im
+	 * selben Prozess (MATSimApplication.execute(...) ruft anders als
+	 * MATSimApplication.run(...) KEIN System.exit auf, siehe MATSimApplication-
+	 * Quelle - der zweite Lauf kommt also tatsaechlich zur Ausfuehrung),
+	 * identisch bis auf den avmModesEnabled-Systemproperty-Schalter (siehe
+	 * prepareConfig). Am Ende automatisch compute_latent_demand.py auf beiden
+	 * Ergebnis-Verzeichnissen.
+	 */
 	public static void main(String[] args) {
-		MATSimApplication.execute(RunOberlausitzDresdenTest.class, "--config", "scenarios/oberlausitz-dresden/config.xml");
+		System.setProperty(AVM_MODES_ENABLED_PROPERTY, "false");
+		MATSimApplication.execute(RunOberlausitzDresdenTest.class, "--config", CONFIG_PATH);
+		String baseOutputDirectory = lastOutputDirectory;
+
+		System.setProperty(AVM_MODES_ENABLED_PROPERTY, "true");
+		MATSimApplication.execute(RunOberlausitzDresdenTest.class, "--config", CONFIG_PATH);
+		String avmOutputDirectory = lastOutputDirectory;
+
+		computeLatentDemand(avmOutputDirectory, baseOutputDirectory);
+	}
+
+	/** Ruft compute_latent_demand.py auf - siehe main()-Javadoc. Ein Fehlschlag hier bricht den Lauf NICHT ab (Ergebnisse beider Simulationen liegen bereits vor). */
+	private static void computeLatentDemand(String avmOutputDirectory, String baseOutputDirectory) {
+		log.info("Basis- und AVM-Lauf abgeschlossen (" + baseOutputDirectory + " / " + avmOutputDirectory
+				+ "), berechne T^lat ueber compute_latent_demand.py...");
+		try {
+			Process process = new ProcessBuilder(
+					"python3", "scenarios/oberlausitz-dresden/compute_latent_demand.py",
+					avmOutputDirectory, baseOutputDirectory)
+					.inheritIO()
+					.start();
+			int exitCode = process.waitFor();
+			if (exitCode != 0) {
+				log.warn("compute_latent_demand.py endete mit Exit-Code " + exitCode + " - siehe Ausgabe oben.");
+			}
+		} catch (IOException e) {
+			log.warn("compute_latent_demand.py konnte nicht gestartet werden (python3 installiert und im PATH?).", e);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			log.warn("compute_latent_demand.py wurde unterbrochen.", e);
+		}
 	}
 
 	@Override
@@ -164,23 +222,24 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 		new ConfigReader(config).readFile("scenarios/testszenario/config.xml");
 
 		// Basis-vs-AVM-Vergleich (siehe behaviourConfigGroup.avmModesEnabled-Javadoc,
-		// Abschnitt "Latente Nachfrage" der Auftraggeber-Spezifikation, Gl.
-		// \ref{eq:latent}): ueber die Umgebungsvariable AVM_MODES_ENABLED=false
-		// aktivierter "Basis"-Lauf ohne AV/PSAV/SSAV im Choice-Set - alles andere
-		// (Population, randomSeed, ascNull, Kandidatenweg-Vorlagen) bleibt
-		// identisch zum AVM-Lauf, sonst waere eine Differenz der
+		// main()-Javadoc, Abschnitt "Latente Nachfrage" der Auftraggeber-
+		// Spezifikation, Gl. \ref{eq:latent}): ueber die System-Property
+		// avmModesEnabled=false (von main() zwischen den beiden Sequenz-Laeufen
+		// gesetzt) aktivierter "Basis"-Lauf ohne AV/PSAV/SSAV im Choice-Set -
+		// alles andere (Population, randomSeed, ascNull, Kandidatenweg-Vorlagen)
+		// bleibt identisch zum AVM-Lauf, sonst waere eine Differenz der
 		// nullAlternativeOutcome-Indikatoren nicht mehr eindeutig auf das
 		// erweiterte Choice-Set zurueckzufuehren. outputDirectory bekommt
 		// automatisch das Suffix "-basis" angehaengt, damit beide Laeufe sich
-		// nicht gegenseitig ueberschreiben - siehe
-		// scripts/run-oberlausitz-dresden-basis.sh.
-		if ("false".equalsIgnoreCase(System.getenv("AVM_MODES_ENABLED"))) {
+		// nicht gegenseitig ueberschreiben.
+		if ("false".equalsIgnoreCase(System.getProperty(AVM_MODES_ENABLED_PROPERTY))) {
 			behaviourConfigGroup.getOrCreate(config).setAvmModesEnabled(false);
 			String outputDirectory = config.controller().getOutputDirectory().replaceAll("/+$", "") + "-basis";
 			config.controller().setOutputDirectory(outputDirectory);
-			log.info("Basislauf (AVM_MODES_ENABLED=false): AV/PSAV/SSAV aus dem Choice-Set entfernt, "
+			log.info("Basislauf (avmModesEnabled=false): AV/PSAV/SSAV aus dem Choice-Set entfernt, "
 					+ "outputDirectory -> " + outputDirectory);
 		}
+		lastOutputDirectory = config.controller().getOutputDirectory();
 
 		// Schritt 15 (Bugfix): travelTimeMatrixCachePath (siehe oberlausitz-dresden/
 		// config.xml) an die geladene Population koppeln - sonst wirft

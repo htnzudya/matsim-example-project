@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# Baut das Projekt und startet RunOberlausitzDresdenTest.
+# Baut das Projekt und startet RunOberlausitzDresdenTest - fuehrt NACHEINANDER
+# im selben Prozess den Basis- (ohne AV/PSAV/SSAV) und den AVM-Lauf aus und
+# berechnet danach automatisch die latente Nachfrage T^lat (siehe
+# RunOberlausitzDresdenTest.main()-Javadoc, compute_latent_demand.py) - Teil
+# der Nullalternative-Methodik, kein separater Schritt. Dauert entsprechend
+# etwa doppelt so lange wie ein einzelner Lauf.
 # Aufruf vom Repo-Root aus: bash scripts/run-oberlausitz-dresden.sh
 #
 # JVM-Heap ueber Umgebungsvariablen anpassbar, z. B. bei anderem WSL-RAM-Limit:

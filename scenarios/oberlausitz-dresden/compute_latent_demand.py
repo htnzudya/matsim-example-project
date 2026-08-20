@@ -5,8 +5,11 @@ Berechnet die latente Nachfrage T^lat aus einem Basis- und einem AVM-Lauf
 Gl. \\ref{eq:realisierung}/\\ref{eq:latent}): beide Laeufe muessen mit
 IDENTISCHEM randomSeed und identischer Population gefahren worden sein und
 sich einzig in der Verfuegbarkeit von AV/PSAV/SSAV im Choice-Set
-unterscheiden (siehe behaviourConfigGroup.avmModesEnabled-Javadoc,
-scripts/run-oberlausitz-dresden-basis.sh fuer den Basislauf).
+unterscheiden (siehe behaviourConfigGroup.avmModesEnabled-Javadoc). Wird von
+RunOberlausitzDresdenTest.main() nach dem Basis- und dem AVM-Lauf automatisch
+aufgerufen (siehe dortigen Javadoc) - dieser Aufruf hier von Hand ist nur fuer
+den Fall gedacht, dass beide Laeufe bereits vorliegen und nur die Auswertung
+erneut laufen soll.
 
 Liest je Lauf die Spalte "nullAlternativeOutcome" aus <runId>.output_persons.csv
 (geschrieben von behaviourCandidateTripInserter, siehe dortigen Javadoc) und
@@ -139,9 +142,10 @@ def main():
     if violations:
         print(
             f"WARNUNG: {violations} Personen mit l_n=-1 (y_base=1, y_AVM=0) - verletzt die "
-            f"erwartete Choice-Set-Monotonie C_base c C_AVM. Pruefen, ob AVM_MODES_ENABLED "
-            f"in beiden Laeufen wirklich nur den Choice-Set-Unterschied ausmacht und ob "
-            f"randomSeed/Population in beiden Configs identisch sind.",
+            f"erwartete Choice-Set-Monotonie C_base c C_AVM. Wurden wirklich zwei zusammengehoerige "
+            f"Laeufe von RunOberlausitzDresdenTest.main() verglichen (Basis- und AVM-Verzeichnis "
+            f"desselben Aufrufs, siehe main()-Javadoc) und nicht zwei Laeufe mit unterschiedlichem "
+            f"randomSeed/Population?",
             file=sys.stderr,
         )
     else:
