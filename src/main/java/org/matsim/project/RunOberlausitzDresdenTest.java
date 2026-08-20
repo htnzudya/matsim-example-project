@@ -326,13 +326,36 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 		throw new IllegalArgumentException("Person " + person.getId() + " hat kein Attribut '" + attributeName + "'.");
 	}
 
+	/**
+	 * "other" ist in den VSP-Populationsdaten ein bekannter Sonderwert fuer
+	 * Personen, deren Wohnort keinem der 111-225-RegioStaR17-Codes zugeordnet
+	 * werden konnte (z. B. grenznahe Adressen ausserhalb Deutschlands - Oberlausitz
+	 * grenzt an Polen/Tschechien) - kein Datenfehler. Betrifft in der 10pct-
+	 * Population genau 1 von 113220 Personen (verifiziert per grep), in der
+	 * 1pct-Stichprobe kam diese Person zufaellig nicht vor, deshalb ist der Fall
+	 * dort nie aufgefallen. Ohne Zusatzinformation zur echten Urbanitaet wird auf
+	 * den haeufigsten beobachteten Code (111, ~46% der Population) imputiert -
+	 * bei n=1 nicht praezise herleitbar, aber der Effekt auf die
+	 * Segment-Klassifikation der Gesamtpopulation ist vernachlaessigbar.
+	 */
+	private static final double REGIO_STA_R17_FALLBACK_CODE = 111.0;
+
+	private static double regioStaR17Code(Object value, Person person) {
+		if ("other".equals(value)) {
+			log.warn("Person {} hat homeRegioStaR17='other' - impute mit Fallback-Code {}",
+					person.getId(), REGIO_STA_R17_FALLBACK_CODE);
+			return REGIO_STA_R17_FALLBACK_CODE;
+		}
+		return asDouble(value, person, "homeRegioStaR17");
+	}
+
 	private static segmentClassifier.agentCovariates extractCovariates(Person person) {
 		var attrs = person.getAttributes();
 		double age = asDouble(attrs.getAttribute("age"), person, "age");
 		boolean female = "f".equals(attrs.getAttribute("sex"));
 		double hhSize = asDouble(attrs.getAttribute("hhSize"), person, "hhSize");
 		double hhIncome = asDouble(attrs.getAttribute("hhIncome"), person, "hhIncome");
-		double regioStaR17 = asDouble(attrs.getAttribute("homeRegioStaR17"), person, "homeRegioStaR17");
+		double regioStaR17 = regioStaR17Code(attrs.getAttribute("homeRegioStaR17"), person);
 		int carAvail = carAvailCode(attrs.getAttribute("carAvail"), person);
 		return new segmentClassifier.agentCovariates(person.getId().toString(), age, female, hhSize, hhIncome,
 				regioStaR17, carAvail);
