@@ -52,6 +52,23 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     private String homeActivityType = "home";
 
     /**
+     * Steuert die Grundmenge der Modusalternativen fuer die Moduswahl UND fuer
+     * die Nullalternative-Ziehung (behaviourCandidateTripInserter): true (Default)
+     * = alle fuenf Alternativen (CA/AV/PT/PSAV/SSAV, siehe alternatives.java),
+     * false = nur CA/PT, AV/PSAV/SSAV werden aus dem Choice-Set entfernt.
+     *
+     * Grund: der "Basis"-Lauf des Basis-vs-AVM-Vergleichs (siehe Abschnitt
+     * "Latente Nachfrage" der Auftraggeber-Spezifikation, Gl. \ref{eq:latent})
+     * unterscheidet sich vom AVM-Lauf EINZIG darin, dass AVM-Modi nicht im
+     * Choice-Set stehen - alles andere (Population, Kandidatenweg-Vorlagen,
+     * randomSeed, ascNull) bleibt identisch, sonst waere eine Differenz der
+     * outcome-Indikatoren nicht mehr eindeutig auf das erweiterte Choice-Set
+     * zurueckzufuehren. Siehe behaviourDiscreteModeChoiceExtension.
+     * provideModeAvailability() fuer die Anwendung.
+     */
+    private boolean avmModesEnabled = true;
+
+    /**
      * ASC_0 der Nullalternative ("kein Kandidatenweg") im erweiterten
      * Choice-Set C_n+ = C_n ∪ {0} - siehe behaviourCandidateTripInserter-
      * Klassen-Javadoc. Die Nullalternative traegt bewusst KEINE weiteren
@@ -127,6 +144,17 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     @StringSetter("homeActivityType")
     public void setHomeActivityType(String homeActivityType) {
         this.homeActivityType = homeActivityType;
+    }
+
+    /** Siehe avmModesEnabled-Feld-Javadoc. */
+    @StringGetter("avmModesEnabled")
+    public boolean getAvmModesEnabled() {
+        return avmModesEnabled;
+    }
+
+    @StringSetter("avmModesEnabled")
+    public void setAvmModesEnabled(boolean avmModesEnabled) {
+        this.avmModesEnabled = avmModesEnabled;
     }
 
     @StringGetter("scaleParameter")
