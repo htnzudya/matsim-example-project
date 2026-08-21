@@ -38,24 +38,26 @@
         <param name="scaleParameter" value="1.0"/>
         <param name="randomSeed" value="4711"/>
         <param name="segmentAttribute" value="segment"/>
-        <param name="ascNull" value="1.12"/>
+        <param name="ascNull" value="-2.955578"/>
         <!-- Nullalternative im DCM (siehe behaviourCandidateTripInserter):
-             ascNull kalibriert auf eine Zusatzweg-Einfuegequote von ~4% der
-             Agenten (Studienvorgabe: Verkehr durch AVM-Verfuegbarkeit nur um
-             ~4% erhoeht) - empirisch iterativ ermittelt (0.0 -> 8.0% Quote,
-             0.73 -> 5.1%, 1.12 -> 3.96%, siehe Git-History), nicht analytisch
-             herleitbar wegen Mixed-Logit-Heterogenitaet (Softmax ueber
-             heterogene Agentenpopulation ist nicht log-linear in ascNull).
-             Bei Aenderungen an anderen modeParams/segmentParams-Werten oder an
-             der Population MUSS neu kalibriert werden (siehe
-             behaviourCandidateTripInserter-Lognachricht "X/Y Agenten mit
-             Kandidatenweg eingefuegt" - Y ist die Gesamtpopulation, X/Y sollte
-             wieder ~4% ergeben). NICHT aus den Excel-Dateien, hier als
-             Konstante gepflegt (wie scaleParameter/randomSeed/
-             segmentAttribute). Der Zweck des Kandidatenwegs wird zufaellig aus
-             allen Nicht-Heim-Aktivitaeten der Population gezogen (ausser
-             Arbeit/Bildung), braucht daher keine eigene Zweck-Taxonomie-
-             Konfiguration. -->
+             ascNull per Schritt-9-Bisektion (behaviourCandidateTripInserter.
+             calibrateAscNull(), verhaltensmodell.ascNullKalibrierungAktiv=true)
+             AUSSCHLIESSLICH in der Basiswelt (CA/PT) auf einen WEG-Anteil von
+             21% kalibriert (Studienvorgabe: 21% unterdrueckte Nachfrage laut
+             aktueller Mid-2023-Umfrage) - erreicht 21.0001% ueber 112725/112952
+             teilnahmefaehige Personen (ascnull_kalibrierung.csv eines
+             10pct-Kalibrierungslaufs vom 2026-08-21, siehe Git-History fuer den
+             vorherigen, direkt im AVM-Szenario auf ~4% Zusatzweg-Quote
+             kalibrierten Platzhalterwert 1.12). Nicht analytisch herleitbar
+             wegen Mixed-Logit-Heterogenitaet (Softmax ueber heterogene
+             Agentenpopulation ist nicht log-linear in ascNull). Bei Aenderungen
+             an anderen modeParams/segmentParams-Werten oder an der Population
+             MUSS mit ascNullKalibrierungAktiv=true neu kalibriert werden.
+             NICHT aus den Excel-Dateien, hier als Konstante gepflegt (wie
+             scaleParameter/randomSeed/segmentAttribute). Der Zweck des
+             Kandidatenwegs wird zufaellig aus allen Nicht-Heim-Aktivitaeten der
+             Population gezogen (ausser Arbeit/Bildung), braucht daher keine
+             eigene Zweck-Taxonomie-Konfiguration. -->
         <param name="ticketAttribute" value="ptTicket"/>
         <param name="ticketOwnedValue" value="full"/>
         <!-- Oberlausitz/Dresden liefert das Personenattribut "ptTicket" mit

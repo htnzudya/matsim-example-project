@@ -64,6 +64,29 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     private double ascNull = 0.0;
 
     /**
+     * Schaltet den ascNull-Kalibrierungslauf statt der normalen Kandidatenweg-
+     * Einfuegung ein (Schritt 9 der Auftraggeber-Spezifikation
+     * "Implementierungsspezifikation: Kandidatenwege mit Nullalternative"):
+     * Bisektion, AUSSCHLIESSLICH in der Basiswelt (CA/PT, unabhaengig vom
+     * konfigurierten kandidatenwegWelt), auf den Ziel-WEG-Anteil
+     * ascNullKalibrierungZielanteil. Ergebnis wird geloggt und nach
+     * ascnull_kalibrierung.csv im outputDirectory geschrieben, danach beendet
+     * der Prozess sich selbst (System.exit) VOR den eigentlichen MATSim-
+     * Iterationen - die sind fuer einen reinen Kalibrierungslauf nutzlos.
+     * Default false: normaler Lauf.
+     */
+    private boolean ascNullKalibrierungAktiv = false;
+
+    /**
+     * Ziel-Anteil der Agenten mit entscheidung==WEG fuer die ascNull-
+     * Kalibrierung (Schritt 9), siehe ascNullKalibrierungAktiv-Javadoc.
+     * Default 0.21: 21% unterdrueckte Nachfrage laut aktueller Mid-2023-
+     * Umfrage (Auftraggeber-Vorgabe) - ersetzt den vorherigen, direkt im AVM-
+     * Szenario ermittelten Platzhalter-Zielwert von ~4% Zusatzweg-Quote.
+     */
+    private double ascNullKalibrierungZielanteil = 0.21;
+
+    /**
      * "base" oder "avm" - Choice-Set der Nullalternative-Ziehung (siehe
      * behaviourCandidateTripInserter.buildWorldChoiceSet-Javadoc), Schritt 5
      * der Auftraggeber-Spezifikation "Implementierungsspezifikation:
@@ -208,6 +231,28 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     @StringSetter("ascNull")
     public void setAscNull(double ascNull) {
         this.ascNull = ascNull;
+    }
+
+    /** Siehe ascNullKalibrierungAktiv-Feld-Javadoc. */
+    @StringGetter("ascNullKalibrierungAktiv")
+    public boolean getAscNullKalibrierungAktiv() {
+        return ascNullKalibrierungAktiv;
+    }
+
+    @StringSetter("ascNullKalibrierungAktiv")
+    public void setAscNullKalibrierungAktiv(boolean ascNullKalibrierungAktiv) {
+        this.ascNullKalibrierungAktiv = ascNullKalibrierungAktiv;
+    }
+
+    /** Siehe ascNullKalibrierungZielanteil-Feld-Javadoc. */
+    @StringGetter("ascNullKalibrierungZielanteil")
+    public double getAscNullKalibrierungZielanteil() {
+        return ascNullKalibrierungZielanteil;
+    }
+
+    @StringSetter("ascNullKalibrierungZielanteil")
+    public void setAscNullKalibrierungZielanteil(double ascNullKalibrierungZielanteil) {
+        this.ascNullKalibrierungZielanteil = ascNullKalibrierungZielanteil;
     }
 
     /** Siehe kandidatenwegWelt-Feld-Javadoc. */

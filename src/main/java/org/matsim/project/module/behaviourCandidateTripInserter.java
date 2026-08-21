@@ -305,6 +305,14 @@ public final class behaviourCandidateTripInserter implements StartupListener {
     @Override
     public void notifyStartup(StartupEvent event) {
 
+        if (cfg.getAscNullKalibrierungAktiv()) {
+            // Schritt 9 (Kalibrierung): ersetzt die normale Kandidatenweg-Einfuegung
+            // komplett, siehe cfg.ascNullKalibrierungAktiv-Javadoc und
+            // calibrateAscNull()-Javadoc.
+            calibrateAscNull();
+            return;
+        }
+
         String homeType = cfg.getHomeActivityType();
         double ascNull = cfg.getAscNull();
         long randomSeed = cfg.getRandomSeed();
@@ -519,6 +527,174 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             log.info("Nullalternative: " + rows.size() + " Zeilen nach " + csvPath + " geschrieben.");
         } catch (IOException e) {
             throw new UncheckedIOException("kandidatenwege.csv konnte nicht geschrieben werden.", e);
+        }
+    }
+
+    /** Phase-1-Ergebnis einer Person fuer die Kalibrierung: routingabhaengig, ascNull-UNABHAENGIG. */
+    private record calibrationPersonContext(Map<alternatives, Double> realUtilities, double nullAlternativeDraw) {
+    }
+
+    /**
+     * Schritt 9 (Kalibrierung): Bisektion auf ascNull, AUSSCHLIESSLICH in der
+     * Basiswelt (CA/PT - unabhaengig vom konfigurierten kandidatenwegWelt,
+     * siehe Spezifikation "darf dort nicht neu kalibriert werden - das waere
+     * zirkulaer"), Ziel = cfg.ascNullKalibrierungZielanteil.
+     *
+     * WICHTIGE ABWEICHUNG von der Spezifikation ("ein Durchlauf ... dauert
+     * Sekunden, 40 Durchlaeufe sind unkritisch"): das gilt fuer die in der
+     * Spezifikation vorgesehene Analytik-LOS ohne Routing (Schritt 4). Dieses
+     * Add-on routet dagegen echt (siehe Klassen-Javadoc) - ein 10pct-Lauf
+     * braucht dafuer mehrere Minuten (siehe Git-Historie), 40x davon waere
+     * unpraktikabel. Deshalb hier explizit in zwei Phasen getrennt: Phase 1
+     * (teuer, EINMAL) berechnet je Person die gerouteten CA/PT-Nutzenwerte
+     * UND die deterministische Ziehung nullAlternativeDraw - beide sind
+     * unabhaengig von ascNull, das nur die Nullalternative selbst betrifft.
+     * Phase 2 (billig, 40x) wiederholt nur noch Softmax+Ziehung ueber die in
+     * Phase 1 bereits berechneten Werte - reine Arithmetik, kein Routing mehr.
+     * Damit bleibt die Bisektion trotz echtem Routing praktikabel (eine
+     * Routing-Phase statt vierzig).
+     *
+     * Strukturell ausgeschlossene Personen (keine Vorlage/kein freier
+     * Zeitpunkt) zaehlen in den Nenner des Ziel-Anteils, tragen aber nie zum
+     * WEG-Zaehler bei - unabhaengig von ascNull, siehe kandidatenwegRow-
+     * Javadoc fuer dieselbe Logik in der normalen CSV.
+     */
+    private void calibrateAscNull() {
+        String homeType = cfg.getHomeActivityType();
+        long randomSeed = cfg.getRandomSeed();
+        String segmentAttribute = cfg.getSegmentAttribute();
+        double targetShare = cfg.getAscNullKalibrierungZielanteil();
+        Set<alternatives> baseChoiceSet = EnumSet.of(alternatives.CA, alternatives.PT);
+
+        Map<alternatives, modeParams> modeParamsByAlternative = cfg.buildModeParams();
+        Map<String, agentProfile> segmentsById = cfg.buildSegments();
+        Map<String, List<candidateTripTemplate>> templatesBySegment = collectTemplates(homeType, segmentAttribute);
+        List<candidateTripTemplate> allTemplates = templatesBySegment.values().stream().flatMap(List::stream).toList();
+
+        int totalPopulation = population.getPersons().size();
+        log.info("ascNull-Kalibrierung: Phase 1 (Routing CA/PT, Basiswelt, einmalig) fuer "
+                + totalPopulation + " Personen, Ziel-WEG-Anteil " + targetShare + "...");
+
+        List<calibrationPersonContext> contexts = new ArrayList<>();
+        for (Person person : population.getPersons().values()) {
+            List<candidateTripTemplate> pool = resolveTemplatePool(person, segmentAttribute, templatesBySegment, allTemplates);
+            if (pool.isEmpty()) {
+                continue; // strukturell ausgeschlossen - siehe Methoden-Javadoc
+            }
+            long templateSeed = tripContextBuilder.personSeed(randomSeed, person.getId(), "candidateTemplate");
+            candidateTripTemplate template = pool.get(new Random(templateSeed).nextInt(pool.size()));
+            double duration = template.durationSeconds();
+            if (duration >= END_OF_DAY_SECONDS) {
+                continue;
+            }
+            List<PlanElement> elements = person.getSelectedPlan().getPlanElements();
+            insertionPoint boundary = findInsertionBoundary(elements, template.startTimeSeconds());
+            if (boundary == null) {
+                continue;
+            }
+            Activity boundaryActivity = boundary.activity();
+            double candidateStart = boundary.candidateStart();
+            if (candidateStart + duration >= END_OF_DAY_SECONDS) {
+                continue;
+            }
+
+            agentProfile profile = resolveProfile(person, segmentAttribute, segmentsById)
+                    .draw(new Random(tripContextBuilder.personSeed(randomSeed, person.getId(), "profile")));
+            Facility originFacility = FacilitiesUtils.toFacility(boundaryActivity, facilities);
+            Activity destinationActivity = copyLocationAs(template.sourceActivity(), template.sourceActivity().getType());
+            Facility destinationFacility = FacilitiesUtils.toFacility(destinationActivity, facilities);
+
+            Collection<String> availableModes = modeAvailability.getAvailableModes(person, List.of());
+            Map<alternatives, Double> realUtilities = new LinkedHashMap<>();
+            for (alternatives alternative : modeParamsByAlternative.keySet()) {
+                if (!baseChoiceSet.contains(alternative) || !availableModes.contains(alternative.getMatsimMode())) {
+                    continue;
+                }
+                if (alternative == alternatives.CA) {
+                    ensureVehicleId(person, alternative.getMatsimMode());
+                }
+                modeParams meanParams = modeParamsByAlternative.get(alternative);
+                modeParams params = meanParams.draw(
+                        new Random(tripContextBuilder.personSeed(randomSeed, person.getId(), alternative.name())));
+                List<? extends PlanElement> routed;
+                try {
+                    routed = tripRouter.calcRoute(alternative.getMatsimMode(), originFacility, destinationFacility,
+                            candidateStart, person, new AttributesImpl());
+                } catch (RuntimeException e) {
+                    continue;
+                }
+                double costPerKm = params.effectiveCostPerKm(cfg.hasTicket(person));
+                TripContext tripContext = tripContextBuilder.buildTripContext(
+                        timeInterpretation, candidateStart, routed, costPerKm);
+                realUtilities.put(alternative, utilityFunction.utility(profile, params, tripContext, null));
+            }
+
+            double draw = new Random(tripContextBuilder.personSeed(randomSeed, person.getId(), "nullAlternativeDraw")).nextDouble();
+            contexts.add(new calibrationPersonContext(realUtilities, draw));
+        }
+
+        log.info("ascNull-Kalibrierung: Phase 1 fertig (" + contexts.size() + "/" + totalPopulation
+                + " Personen teilnahmefaehig), Phase 2 (Bisektion, 40 Iterationen, kein weiteres Routing)...");
+
+        double scaleParameter = cfg.getScaleParameter();
+        double lo = -10.0, hi = 10.0, mid = 0.0;
+        long wegCountAtMid = 0;
+        for (int iteration = 0; iteration < 40; iteration++) {
+            mid = (lo + hi) / 2.0;
+            wegCountAtMid = 0;
+            for (calibrationPersonContext context : contexts) {
+                if (context.realUtilities().isEmpty()) {
+                    continue; // kein Modus verfuegbar/routbar - immer Nullalternative, unabhaengig von ascNull
+                }
+                Map<Optional<alternatives>, Double> utilities = new LinkedHashMap<>();
+                utilities.put(Optional.empty(), mid);
+                for (Map.Entry<alternatives, Double> entry : context.realUtilities().entrySet()) {
+                    utilities.put(Optional.of(entry.getKey()), entry.getValue());
+                }
+                Map<Optional<alternatives>, Double> probabilities = behaviourUtilityFunction.softmax(utilities, scaleParameter);
+                if (behaviourUtilityFunction.drawFromCumulative(probabilities, context.nullAlternativeDraw()).isPresent()) {
+                    wegCountAtMid++;
+                }
+            }
+            double share = (double) wegCountAtMid / totalPopulation;
+            // P(0) steigt monoton mit ascNull -> WEG-Anteil faellt monoton mit ascNull (siehe
+            // Methoden-Javadoc): Anteil zu hoch -> ascNull erhoehen -> obere Haelfte weitersuchen.
+            if (share > targetShare) {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+
+        double finalShare = (double) wegCountAtMid / totalPopulation;
+        log.info(String.format(Locale.ROOT,
+                "ascNull-Kalibrierung fertig: ascNull=%.6f (WEG-Anteil %.4f, Ziel %.4f, Basiswelt CA/PT, "
+                        + "%d/%d Personen, 40 Bisektionsschritte).",
+                mid, finalShare, targetShare, wegCountAtMid, totalPopulation));
+        writeCalibrationResult(mid, targetShare, finalShare, wegCountAtMid, totalPopulation);
+
+        // Kein Aufruf hier hat einen Sinn fuer einen reinen Kalibrierungslauf - die eigentlichen
+        // MATSim-Iterationen (config.controller().lastIteration) wuerden nur die UNVERAENDERTEN
+        // Basisplaene (kein Kandidatenweg eingefuegt, siehe notifyStartup-Guard) minutenlang
+        // durchrechnen, ohne dass das Ergebnis irgendwo verwendet wird.
+        log.info("ascNull-Kalibrierung: beende den Prozess (keine MATSim-Iterationen fuer einen "
+                + "reinen Kalibrierungslauf noetig).");
+        System.exit(0);
+    }
+
+    private void writeCalibrationResult(double ascNull, double targetShare, double achievedShare,
+            long wegCount, int totalPopulation) {
+        try {
+            Path directory = Path.of(config.controller().getOutputDirectory());
+            Files.createDirectories(directory);
+            Path csvPath = directory.resolve("ascnull_kalibrierung.csv");
+            String csv = "ascNull;zielAnteil;erreichterAnteil;wegCount;totalPopulation\n"
+                    + String.format(Locale.ROOT, "%.6f;%.6f;%.6f;%d;%d\n",
+                            ascNull, targetShare, achievedShare, wegCount, totalPopulation);
+            Files.writeString(csvPath, csv, StandardCharsets.UTF_8);
+            log.info("ascNull-Kalibrierung: Ergebnis nach " + csvPath + " geschrieben.");
+        } catch (IOException e) {
+            throw new UncheckedIOException("ascnull_kalibrierung.csv konnte nicht geschrieben werden.", e);
         }
     }
 
