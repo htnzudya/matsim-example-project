@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -319,6 +320,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
         String segmentAttribute = cfg.getSegmentAttribute();
         Set<alternatives> worldChoiceSet = buildWorldChoiceSet(cfg.getKandidatenwegWelt());
         List<kandidatenwegRow> csvRows = new ArrayList<>();
+        List<logsumRow> logsumRows = new ArrayList<>();
 
         Map<alternatives, modeParams> modeParamsByAlternative = cfg.buildModeParams();
         Map<String, agentProfile> segmentsById = cfg.buildSegments();
@@ -459,6 +461,8 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                 utilities.put(Optional.of(alternative), utilityFunction.utility(profile, params, tripContext, null));
             }
 
+            logsumRows.add(buildLogsumRow(personId, segment, utilities));
+
             if (utilities.size() == 1) {
                 // nur die Nullalternative selbst (kein Modus verfuegbar/routbar) - keine echte Wahl
                 // moeglich, P(0)=1 deterministisch (Spezifikation Testfall 7, siehe
@@ -495,6 +499,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                 inserted, total, skippedNullChosen, skippedNoFreeSlot, skippedNoTemplate, skippedNoModeAvailable));
 
         writeKandidatenwegeCsv(csvRows);
+        writeLogsumCsv(logsumRows);
     }
 
     /**
@@ -527,6 +532,100 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             log.info("Nullalternative: " + rows.size() + " Zeilen nach " + csvPath + " geschrieben.");
         } catch (IOException e) {
             throw new UncheckedIOException("kandidatenwege.csv konnte nicht geschrieben werden.", e);
+        }
+    }
+
+    /**
+     * Logsum je Person UND je Alternative (Konzept aus dem induzierte-
+     * Nachfrage-Branch, siehe inducedDemandModel-Klassen-Javadoc dort:
+     * Lambda_n = ln SUM_{i in C_n} exp(V_ni), unveraendert uebernommen ueber
+     * behaviourUtilityFunction.logsum - hier NUR als Diagnose-Output, OHNE
+     * den dortigen Generierungsmechanismus (growthFactor/induzierte Wege) zu
+     * uebernehmen):
+     *
+     *   lambdaBase = Logsum ueber die heutige Welt (nur CA/PT, siehe
+     *                inducedDemandModel.BASELINE_CHOICE_SET) - als TEILMENGE
+     *                der bereits gerouteten realUtilities gebildet, KEIN
+     *                zusaetzliches Routing noetig.
+     *   lambdaAvm  = Logsum ueber das tatsaechlich verfuegbare/geroutete
+     *                Choice-Set dieser Person (kann bei kandidatenwegWelt=
+     *                base identisch zu lambdaBase sein - dann stehen ohnehin
+     *                nur CA/PT im Choice-Set, siehe buildWorldChoiceSet).
+     *   deltaLogsum = lambdaAvm - lambdaBase.
+     *
+     * "pro Alternative": zusaetzlich der einzelne Nutzenwert V_i je
+     * Alternative (CA/AV/PT/PSAV/SSAV), leer, wenn fuer diese Person nicht
+     * verfuegbar/routbar - das ist die Aufschluesselung, aus der sich
+     * lambdaAvm zusammensetzt.
+     */
+    private record logsumRow(String personId, String segment, Double lambdaBase, Double lambdaAvm,
+            Double deltaLogsum, Map<alternatives, Double> perAlternative) {
+    }
+
+    private logsumRow buildLogsumRow(String personId, String segment, Map<Optional<alternatives>, Double> utilities) {
+        Map<alternatives, Double> realUtilities = new EnumMap<>(alternatives.class);
+        for (Map.Entry<Optional<alternatives>, Double> entry : utilities.entrySet()) {
+            entry.getKey().ifPresent(alternative -> realUtilities.put(alternative, entry.getValue()));
+        }
+        if (realUtilities.isEmpty()) {
+            return new logsumRow(personId, segment, null, null, null, realUtilities);
+        }
+        double lambdaAvm = utilityFunction.logsum(realUtilities);
+
+        // "Heutige Welt" = nur CA/PT (inducedDemandModel.BASELINE_CHOICE_SET im
+        // induzierte-Nachfrage-Branch - die Klasse existiert in diesem Branch nicht
+        // mehr, daher hier inline statt einer neuen Abhaengigkeit), dieselbe Menge
+        // wie buildWorldChoiceSet("base").
+        Map<alternatives, Double> baselineUtilities = new EnumMap<>(alternatives.class);
+        for (alternatives baselineAlternative : EnumSet.of(alternatives.CA, alternatives.PT)) {
+            Double v = realUtilities.get(baselineAlternative);
+            if (v != null) {
+                baselineUtilities.put(baselineAlternative, v);
+            }
+        }
+        Double lambdaBase = baselineUtilities.isEmpty() ? null : utilityFunction.logsum(baselineUtilities);
+        Double deltaLogsum = lambdaBase == null ? null : lambdaAvm - lambdaBase;
+
+        return new logsumRow(personId, segment, lambdaBase, lambdaAvm, deltaLogsum, realUtilities);
+    }
+
+    /**
+     * Schreibt logsum.csv (Diagnose-Output, siehe logsumRow-Javadoc) ins
+     * outputDirectory: eine Zeile je Person, die die Nutzenberechnung
+     * erreicht hat (nicht bei skipped:noTemplate/skipped:noFreeSlot - dort
+     * gibt es kein geroutetes Choice-Set, ueber das ein Logsum sinnvoll
+     * waere). V_&lt;alternative&gt;-Spalten in fester Reihenfolge (alternatives-
+     * Enum-Deklaration: CA, AV, PT, PSAV, SSAV), leer wenn fuer diese Person
+     * nicht verfuegbar/routbar.
+     */
+    private void writeLogsumCsv(List<logsumRow> rows) {
+        try {
+            Path directory = Path.of(config.controller().getOutputDirectory());
+            Files.createDirectories(directory);
+            Path csvPath = directory.resolve("logsum.csv");
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("personId;segment;lambdaBase;lambdaAvm;deltaLogsum");
+            for (alternatives alternative : alternatives.values()) {
+                sb.append(";V_").append(alternative.name());
+            }
+            sb.append('\n');
+            for (logsumRow row : rows) {
+                sb.append(row.personId()).append(';')
+                        .append(row.segment()).append(';')
+                        .append(row.lambdaBase() == null ? "" : String.format(Locale.ROOT, "%.6f", row.lambdaBase())).append(';')
+                        .append(row.lambdaAvm() == null ? "" : String.format(Locale.ROOT, "%.6f", row.lambdaAvm())).append(';')
+                        .append(row.deltaLogsum() == null ? "" : String.format(Locale.ROOT, "%.6f", row.deltaLogsum()));
+                for (alternatives alternative : alternatives.values()) {
+                    Double v = row.perAlternative().get(alternative);
+                    sb.append(';').append(v == null ? "" : String.format(Locale.ROOT, "%.6f", v));
+                }
+                sb.append('\n');
+            }
+            Files.writeString(csvPath, sb.toString(), StandardCharsets.UTF_8);
+            log.info("Nullalternative: " + rows.size() + " Zeilen nach " + csvPath + " geschrieben.");
+        } catch (IOException e) {
+            throw new UncheckedIOException("logsum.csv konnte nicht geschrieben werden.", e);
         }
     }
 
