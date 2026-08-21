@@ -64,6 +64,19 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     private double ascNull = 0.0;
 
     /**
+     * "base" oder "avm" - Choice-Set der Nullalternative-Ziehung (siehe
+     * behaviourCandidateTripInserter.buildWorldChoiceSet-Javadoc), Schritt 5
+     * der Auftraggeber-Spezifikation "Implementierungsspezifikation:
+     * Kandidatenwege mit Nullalternative": "base" beschraenkt auf CA/PT,
+     * "avm" (Default) alle fuenf Alternativen. Wirkt NUR auf den
+     * Kandidatenweg-Mechanismus, NICHT auf die normale Moduswahl der uebrigen
+     * (bereits erhobenen) Wege - dafuer bleibt behaviourModeAvailability
+     * unveraendert. Bewusst ein manueller Config-Schalter statt eines
+     * automatischen Doppellaufs ueber beide Welten.
+     */
+    private String kandidatenwegWelt = "avm";
+
+    /**
      * Name des Person-Attributs, das ein bereits vorhandenes Abo/Zeitkarte
      * anzeigt (Oberlausitz/Dresden liefert das als "ptTicket" mit, siehe
      * output_persons.csv eines echten Laufs: Werte "none"/"full", ~14 % der
@@ -195,6 +208,17 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     @StringSetter("ascNull")
     public void setAscNull(double ascNull) {
         this.ascNull = ascNull;
+    }
+
+    /** Siehe kandidatenwegWelt-Feld-Javadoc. */
+    @StringGetter("kandidatenwegWelt")
+    public String getKandidatenwegWelt() {
+        return kandidatenwegWelt;
+    }
+
+    @StringSetter("kandidatenwegWelt")
+    public void setKandidatenwegWelt(String kandidatenwegWelt) {
+        this.kandidatenwegWelt = kandidatenwegWelt;
     }
 
     @StringGetter("classifierWeightAge")

@@ -1,12 +1,20 @@
 package org.matsim.project.module;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -17,11 +25,13 @@ import org.matsim.api.core.v01.population.Person;
 import org.matsim.api.core.v01.population.Plan;
 import org.matsim.api.core.v01.population.PlanElement;
 import org.matsim.api.core.v01.population.Population;
+import org.matsim.core.config.Config;
 import org.matsim.core.controler.events.StartupEvent;
 import org.matsim.core.controler.listener.StartupListener;
 import org.matsim.core.population.PopulationUtils;
 import org.matsim.core.router.TripRouter;
 import org.matsim.core.router.TripStructureUtils;
+import org.matsim.core.utils.geometry.CoordUtils;
 import org.matsim.core.utils.timing.TimeInterpretation;
 import org.matsim.facilities.ActivityFacilities;
 import org.matsim.facilities.FacilitiesUtils;
@@ -184,11 +194,13 @@ public final class behaviourCandidateTripInserter implements StartupListener {
     private final behaviourModeAvailability modeAvailability;
     private final behaviourConfigGroup cfg;
     private final Vehicles vehicles;
+    private final Config config;
 
     @Inject
     public behaviourCandidateTripInserter(Population population, ActivityFacilities facilities,
             TripRouter tripRouter, TimeInterpretation timeInterpretation, behaviourUtilityFunction utilityFunction,
-            behaviourModeAvailability modeAvailability, behaviourConfigGroup cfg, Vehicles vehicles) {
+            behaviourModeAvailability modeAvailability, behaviourConfigGroup cfg, Vehicles vehicles,
+            Config config) {
         this.population = population;
         this.facilities = facilities;
         this.tripRouter = tripRouter;
@@ -197,6 +209,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
         this.modeAvailability = modeAvailability;
         this.cfg = cfg;
         this.vehicles = vehicles;
+        this.config = config;
     }
 
     /**
@@ -251,6 +264,44 @@ public final class behaviourCandidateTripInserter implements StartupListener {
         return homeType.equals(behaviourModule.parseActivityType(activityType).purpose());
     }
 
+    /**
+     * Choice-Set der Nullalternative-Ziehung nach verhaltensmodell.
+     * kandidatenwegWelt (Schritt 5 der Auftraggeber-Spezifikation
+     * "Implementierungsspezifikation: Kandidatenwege mit Nullalternative"):
+     * "base" = nur CA/PT (keine automatisierte Mobilitaet), "avm" = alle
+     * fuenf Alternativen. Wirkt NUR hier auf den Kandidatenweg-Mechanismus -
+     * die normale Moduswahl der uebrigen Wege (behaviourModeAvailability)
+     * bleibt davon unberuehrt, siehe cfg.kandidatenwegWelt-Javadoc.
+     */
+    private static Set<alternatives> buildWorldChoiceSet(String kandidatenwegWelt) {
+        if ("base".equalsIgnoreCase(kandidatenwegWelt)) {
+            return EnumSet.of(alternatives.CA, alternatives.PT);
+        }
+        if (!"avm".equalsIgnoreCase(kandidatenwegWelt)) {
+            throw new IllegalArgumentException("Unbekannter Wert '" + kandidatenwegWelt
+                    + "' fuer verhaltensmodell.kandidatenwegWelt - erwartet 'base' oder 'avm'.");
+        }
+        return EnumSet.allOf(alternatives.class);
+    }
+
+    /**
+     * Eine Zeile der Auswertungs-CSV (Schritt 8): "eine Zeile je Agent,
+     * unabhaengig vom Ergebnis". entscheidung ist "WEG" (Kandidatenweg
+     * eingefuegt) oder "NULLALTERNATIVE" - die Spezifikation kennt nur diese
+     * zwei Werte, strukturelle Ueberspringungs-Faelle (kein Modus verfuegbar/
+     * routbar, keine Vorlage, kein freier Zeitpunkt) werden hier ebenfalls
+     * als NULLALTERNATIVE gefuehrt (es findet so oder so kein Weg statt),
+     * mit leeren u/p0/distanz/zweck-Feldern, sofern zu diesem Zeitpunkt der
+     * Verarbeitung noch nicht bekannt - siehe Anwendungsstellen in
+     * notifyStartup. Ausnahme "kein Modus verfuegbar/routbar": dort ist
+     * p0=1.0 deterministisch (nur die Nullalternative im Choice-Set, siehe
+     * Spezifikation Testfall 7), auch wenn keine tatsaechliche Ziehung
+     * stattfand.
+     */
+    private record kandidatenwegRow(String personId, String segment, Double distanzMeter, String zweck, Double u,
+            Double p0, String entscheidung, String modus) {
+    }
+
     @Override
     public void notifyStartup(StartupEvent event) {
 
@@ -258,6 +309,8 @@ public final class behaviourCandidateTripInserter implements StartupListener {
         double ascNull = cfg.getAscNull();
         long randomSeed = cfg.getRandomSeed();
         String segmentAttribute = cfg.getSegmentAttribute();
+        Set<alternatives> worldChoiceSet = buildWorldChoiceSet(cfg.getKandidatenwegWelt());
+        List<kandidatenwegRow> csvRows = new ArrayList<>();
 
         Map<alternatives, modeParams> modeParamsByAlternative = cfg.buildModeParams();
         Map<String, agentProfile> segmentsById = cfg.buildSegments();
@@ -276,6 +329,10 @@ public final class behaviourCandidateTripInserter implements StartupListener {
         for (Person person : population.getPersons().values()) {
             total++;
 
+            String personId = person.getId().toString();
+            Object segmentValue = person.getAttributes().getAttribute(segmentAttribute);
+            String segment = segmentValue == null ? "unbekannt" : segmentValue.toString();
+
             Plan plan = person.getSelectedPlan();
             List<PlanElement> elements = plan.getPlanElements();
 
@@ -283,16 +340,19 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             if (pool.isEmpty()) {
                 skippedNoTemplate++;
                 person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noTemplate");
+                csvRows.add(new kandidatenwegRow(personId, segment, null, null, null, null, "NULLALTERNATIVE", null));
                 continue;
             }
 
             long templateSeed = tripContextBuilder.personSeed(randomSeed, person.getId(), "candidateTemplate");
             candidateTripTemplate template = pool.get(new Random(templateSeed).nextInt(pool.size()));
+            String zweck = behaviourModule.parseActivityType(template.sourceActivity().getType()).purpose();
 
             double duration = template.durationSeconds();
             if (duration >= END_OF_DAY_SECONDS) {
                 skippedNoTemplate++;
                 person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noTemplate");
+                csvRows.add(new kandidatenwegRow(personId, segment, null, zweck, null, null, "NULLALTERNATIVE", null));
                 continue;
             }
 
@@ -303,13 +363,25 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                 // findInsertionBoundary-Javadoc). Kein freier Zeitpunkt fuer einen Zusatzweg.
                 skippedNoFreeSlot++;
                 person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noFreeSlot");
+                csvRows.add(new kandidatenwegRow(personId, segment, null, zweck, null, null, "NULLALTERNATIVE", null));
                 continue;
             }
             Activity boundaryActivity = boundary.activity();
             double candidateStart = boundary.candidateStart();
+
+            // Luftliniendistanz Einfuegepunkt->Kandidatenziel (Schritt 8, Spalte "distanz") -
+            // hier statt erst nach dem Tagesende-Check berechnen: braucht nur boundaryActivity
+            // (bereits bekannt) und template.sourceActivity() (dieselbe Koordinate wie die
+            // spaeter tatsaechlich verwendete destinationActivity, siehe copyLocationAs unten -
+            // nur der Aktivitaetstyp aendert sich, nicht der Ort).
+            double distanzMeter = CoordUtils.calcEuclideanDistance(
+                    FacilitiesUtils.toFacility(boundaryActivity, facilities).getCoord(),
+                    FacilitiesUtils.toFacility(template.sourceActivity(), facilities).getCoord());
+
             if (candidateStart + duration >= END_OF_DAY_SECONDS) {
                 skippedNoTemplate++;
                 person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noTemplate");
+                csvRows.add(new kandidatenwegRow(personId, segment, distanzMeter, zweck, null, null, "NULLALTERNATIVE", null));
                 continue;
             }
 
@@ -323,8 +395,21 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             Map<Optional<alternatives>, Double> utilities = new LinkedHashMap<>();
             utilities.put(Optional.empty(), ascNull);
 
+            // Schritt 5 (Choice Set/Verfuegbarkeit): Basis-/AVM-Welt zuerst (worldChoiceSet),
+            // danach Fuehrerschein/Fahrzeugzugang (modeAvailability, unveraendert fuer die
+            // uebrige Moduswahl). CA/PAV(AV) "nur wenn carAvail gesetzt" und PSAV/SSAV "immer
+            // verfuegbar" deckt modeAvailability bereits ab (siehe dortigen Javadoc). PT-
+            // Anbindung bewusst OHNE eigene Distanzschwelle: PT ist wie im laufenden DCM
+            // unbedingt verfuegbar (behaviourModeAvailability-Javadoc "fuer alle Personen
+            // verfuegbar, keine Einschraenkung") - schlechte Anbindung wirkt stattdessen ueber
+            // die reale, geroutete Wartezeit/Reisezeit auf den Nutzen (tripContextBuilder.
+            // ptWaitTimeHours), also denselben weichen Mechanismus wie bei den uebrigen Wegen,
+            // statt einen zweiten, hier eigenstaendig eingefuehrten harten Cutoff zu pflegen.
             Collection<String> availableModes = modeAvailability.getAvailableModes(person, List.of());
             for (alternatives alternative : modeParamsByAlternative.keySet()) {
+                if (!worldChoiceSet.contains(alternative)) {
+                    continue;
+                }
                 if (!availableModes.contains(alternative.getMatsimMode())) {
                     continue;
                 }
@@ -367,25 +452,31 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             }
 
             if (utilities.size() == 1) {
-                // nur die Nullalternative selbst (kein Modus verfuegbar/routbar) - keine echte Wahl moeglich
+                // nur die Nullalternative selbst (kein Modus verfuegbar/routbar) - keine echte Wahl
+                // moeglich, P(0)=1 deterministisch (Spezifikation Testfall 7, siehe
+                // kandidatenwegRow-Javadoc).
                 skippedNoModeAvailable++;
                 person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noModeAvailable");
+                csvRows.add(new kandidatenwegRow(personId, segment, distanzMeter, zweck, null, 1.0, "NULLALTERNATIVE", null));
                 continue;
             }
 
             Map<Optional<alternatives>, Double> probabilities = behaviourUtilityFunction.softmax(utilities, cfg.getScaleParameter());
             double draw = new Random(tripContextBuilder.personSeed(randomSeed, person.getId(), "nullAlternativeDraw")).nextDouble();
             Optional<alternatives> chosen = behaviourUtilityFunction.drawFromCumulative(probabilities, draw);
+            double p0 = probabilities.get(Optional.<alternatives>empty());
 
             if (chosen.isEmpty()) {
                 skippedNullChosen++;
                 person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "optedOut");
+                csvRows.add(new kandidatenwegRow(personId, segment, distanzMeter, zweck, draw, p0, "NULLALTERNATIVE", null));
                 continue;
             }
 
             insertCandidateTrip(plan, boundary.index(), boundaryActivity, boundary.appendAtDayEnd(),
                     chosen.get().getMatsimMode(), destinationActivity, candidateStart, duration);
             person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "inserted:" + chosen.get().getMatsimMode());
+            csvRows.add(new kandidatenwegRow(personId, segment, distanzMeter, zweck, draw, p0, "WEG", chosen.get().getMatsimMode()));
             inserted++;
         }
 
@@ -394,6 +485,41 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                         + "(Nullalternative gewaehlt: %d, kein freier Zeitpunkt (Arbeit/Bildung): %d, "
                         + "keine Vorlage: %d, kein Modus verfuegbar/routbar: %d).",
                 inserted, total, skippedNullChosen, skippedNoFreeSlot, skippedNoTemplate, skippedNoModeAvailable));
+
+        writeKandidatenwegeCsv(csvRows);
+    }
+
+    /**
+     * Schreibt die Auswertungs-CSV (Schritt 8 der Spezifikation) ins
+     * outputDirectory des Laufs: eine Zeile je Agent, unabhaengig vom
+     * Ergebnis - siehe kandidatenwegRow-Javadoc fuer die Semantik der
+     * Spalten und fuer die NULLALTERNATIVE-Zuordnung struktureller
+     * Ueberspringungs-Faelle.
+     */
+    private void writeKandidatenwegeCsv(List<kandidatenwegRow> rows) {
+        try {
+            Path directory = Path.of(config.controller().getOutputDirectory());
+            Files.createDirectories(directory);
+            Path csvPath = directory.resolve("kandidatenwege.csv");
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("personId;segment;distanz;zweck;u;p0;entscheidung;modus\n");
+            for (kandidatenwegRow row : rows) {
+                sb.append(row.personId()).append(';')
+                        .append(row.segment()).append(';')
+                        .append(row.distanzMeter() == null ? "" : String.format(Locale.ROOT, "%.3f", row.distanzMeter())).append(';')
+                        .append(row.zweck() == null ? "" : row.zweck()).append(';')
+                        .append(row.u() == null ? "" : String.format(Locale.ROOT, "%.6f", row.u())).append(';')
+                        .append(row.p0() == null ? "" : String.format(Locale.ROOT, "%.6f", row.p0())).append(';')
+                        .append(row.entscheidung()).append(';')
+                        .append(row.modus() == null ? "" : row.modus())
+                        .append('\n');
+            }
+            Files.writeString(csvPath, sb.toString(), StandardCharsets.UTF_8);
+            log.info("Nullalternative: " + rows.size() + " Zeilen nach " + csvPath + " geschrieben.");
+        } catch (IOException e) {
+            throw new UncheckedIOException("kandidatenwege.csv konnte nicht geschrieben werden.", e);
+        }
     }
 
     /**
