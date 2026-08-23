@@ -7,12 +7,10 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import org.matsim.api.core.v01.Coord;
 import org.matsim.api.core.v01.Id;
@@ -132,21 +130,34 @@ public final class behaviourModule extends AbstractModule {
         dmcConfig.setTripEstimator(behaviourDiscreteModeChoiceExtension.TRIP_ESTIMATOR_NAME);
         dmcConfig.setTourEstimator(EstimatorModule.CUMULATIVE);
 
-        // Caching aktivieren: unser Estimator ruft fuer CA/AV/PSAV/SSAV echtes Netzwerk-
-        // Routing auf (AbstractTripRouterEstimator routet jeden Kandidaten selbst),
-        // das ist auf einem echten Netz (nicht equil) spuerbar teuer. Da unsere
-        // Mixed-Logit-Ziehung ohnehin deterministisch aus Person+Modus ist (Schritt 6),
-        // liefert Caching garantiert dieselben Ergebnisse wie ohne - reine
-        // Performance-Optimierung, keine Verhaltensaenderung.
-        dmcConfig.setCachedModes(Arrays.stream(alternatives.values())
-                .map(alternatives::getMatsimMode)
-                .collect(Collectors.toSet()));
+        // Caching BEWUSST NICHT aktiviert (Bugfix): DMCs CachedTripEstimator haelt den
+        // Cache je Modus in einer einfachen java.util.HashMap (siehe dortigen
+        // Bytecode - kein ConcurrentHashMap, keine externe Synchronisierung), aber
+        // AbstractMultithreadedModule ruft estimateTrip(...) aus allen
+        // numberOfThreads Replanning-Threads GLEICHZEITIG auf. Nebenlaeufige
+        // computeIfAbsent-Aufrufe auf einer einfachen HashMap koennen deren
+        // interne Baumstruktur korrumpieren - beobachtet als eine Endlosschleife
+        // in HashMap$TreeNode.find (Thread-Dump: ein Replanning-Thread haengt dort
+        // fest, die anderen 11 sind laengst fertig, keine Exception, kein
+        // Fortschritt mehr moeglich). setCachedModes(...) war als reine Performance-
+        // Optimierung gedacht ("liefert garantiert dieselben Ergebnisse wie ohne"),
+        // ist dafuer aber nicht threadsicher genug - deshalb ersatzlos entfernt statt
+        // z. B. auf ein synchronisiertes Map zu wechseln, das DMC selbst nicht anbietet.
 
         // Schritt 7: eigene ModeAvailability statt des DMC-Bausteins "Car" - filtert
         // CA (Fuehrerschein + Fahrzeugzugang) und AV (nur Fahrzeugzugang) je Person,
         // siehe behaviourModeAvailability-Javadoc. Die fuenf Alternativen selbst kommen
         // aus alternatives.java, nicht aus einer XML-Modusliste.
         dmcConfig.setModeAvailability(behaviourDiscreteModeChoiceExtension.MODE_AVAILABILITY_NAME);
+
+        // BIKE/WALK/RIDE sind keine DCM-Alternativen (siehe alternatives.java) - ohne
+        // diesen Filter wandelt DiscreteModeChoice erhobene BIKE/WALK/RIDE-Touren zwar
+        // IN eine der fuenf Alternativen um, aber NIE zurueck (einseitige, rein
+        // mechanische Ausblutung Richtung 0%, kein Verhaltensgleichgewicht - siehe
+        // behaviourNonDcmModeTourFilter-Klassen-Javadoc). Solche Touren bleiben
+        // deshalb komplett ausserhalb der Umplanung, unveraendert wie erhoben; die
+        // fuenf DCM-Alternativen bleiben untereinander frei waehlbar.
+        dmcConfig.setTourFilters(List.of(behaviourDiscreteModeChoiceExtension.TOUR_FILTER_NAME));
 
         // Schritt 7 (Netzwerkrouting): AV nutzt dasselbe Strassennetz wie CA und
         // erlebt dieselbe Stau-Dynamik, statt teleportiert zu werden. Dazu reicht es,

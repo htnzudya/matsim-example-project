@@ -120,9 +120,20 @@ public class behaviourUtilityEstimator extends AbstractTripRouterEstimator {
 
         alternatives alternative = alternatives.fromMatsimMode(mode);
         if (alternative == null) {
-            throw new IllegalArgumentException(
-                    "Kein Alternativen-Mapping fuer MATSim-Modus '" + mode + "' (siehe alternatives.java). "
-                            + "availableModes in der DMC-Config darf nur Modi enthalten, die alternatives kennt.");
+            // Kommt NICHT aus der eigentlichen Moduswahl - behaviourModeAvailability
+            // bietet ausschliesslich die fuenf DCM-Alternativen als Kandidaten an (siehe
+            // dortigen Javadoc), ModeChainGenerator kann diese Methode also nie mit einem
+            // echten Wahl-Kandidaten in einem anderen Modus aufrufen. Stattdessen: DMCs
+            // TourBasedModel.chooseModes(...) ruft fuer JEDE Tour, die
+            // behaviourNonDcmModeTourFilter ausschliesst (BIKE/WALK/RIDE, siehe dortigen
+            // Javadoc), trotzdem TourBasedModel.createFallbackCandidate(...) auf, um einen
+            // bewerteten "unveraendert lassen"-Kandidaten fuer den Tagesplan zu haben -
+            // und die ruft denselben TourEstimator/TripEstimator mit dem URSPRUENGLICHEN
+            // Modus (hier: "bike"/"walk"/"ride") auf. Dieser Kandidat beeinflusst NIE die
+            // eigentliche Wahl (die gefilterte Tour bleibt so oder so unveraendert) - der
+            // Nutzenwert wird nur fuer DMCs internen Tagesplan-Zusammenbau gebraucht, daher
+            // hier ein neutraler Platzhalter (0.0) statt eines Abbruchs.
+            return 0.0;
         }
 
         modeParams meanParams = modeParamsByAlternative.get(alternative);

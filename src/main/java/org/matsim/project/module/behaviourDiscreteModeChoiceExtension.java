@@ -16,17 +16,21 @@ import com.google.inject.Singleton;
  *  - behaviourUtilityEstimator als TripEstimator
  *  - behaviourModeAvailability als ModeAvailability (Fuehrerschein-/Fahrzeug-
  *    zugangs-Constraint fuer CA/AV, siehe dortigen Javadoc)
+ *  - behaviourNonDcmModeTourFilter als TourFilter (schliesst BIKE/WALK/RIDE-
+ *    Touren von der Umplanung aus, siehe dortigen Klassen-Javadoc)
  * Wird von behaviourModule.install() eingebunden.
  */
 public final class behaviourDiscreteModeChoiceExtension extends AbstractDiscreteModeChoiceExtension {
 
     public static final String TRIP_ESTIMATOR_NAME = "verhalten";
     public static final String MODE_AVAILABILITY_NAME = "verhalten";
+    public static final String TOUR_FILTER_NAME = "verhalten";
 
     @Override
     protected void installExtension() {
         bindTripEstimator(TRIP_ESTIMATOR_NAME).to(behaviourUtilityEstimator.class);
         bindModeAvailability(MODE_AVAILABILITY_NAME).to(behaviourModeAvailability.class);
+        bindTourFilter(TOUR_FILTER_NAME).to(behaviourNonDcmModeTourFilter.class);
     }
 
     /**
