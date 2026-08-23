@@ -33,16 +33,15 @@
 		<param name="laneDefinitionsFile" value="null"/>
 	</module>
 
-	<!-- Zurueck auf 10pct (Ergebnis-/Validierungslauf): flowCapacityFactor/
-	     storageCapacityFactor (siehe qsim-Modul) stehen bereits auf 0.1 fuer
-	     eine 10pct-Population - inputPlansFile hing hier noch auf 1pct nach,
-	     dadurch war die Netzkapazitaet 10x zu hoch fuer die geladene
-	     Agentenzahl. Fuer einen schnellen Dev-Zyklus ggf. wieder auf 1pct
-	     zurueckstellen, dann aber auch flowCapacityFactor/
-	     storageCapacityFactor auf 0.01 zuruecksetzen (siehe Git-History). -->
+	<!-- Auf 1pct zurueckgestellt (Auftraggeber-Vorgabe, zusammen mit
+	     lastIteration=15): flowCapacityFactor/storageCapacityFactor unten
+	     entsprechend auf 0.01 gesetzt, muss bei jeder Aenderung der
+	     Populationsstufe konsistent mitgezogen werden (siehe Git-History -
+	     genau diese Inkonsistenz hatte vorher zu einer 10x zu hohen
+	     Netzkapazitaet gefuehrt). -->
 	<module name="plans">
 		<param name="inputPlansFile"
-		       value="https://svn.vsp.tu-berlin.de/repos/public-svn/matsim/scenarios/countries/de/oberlausitz-dresden/oberlausitz-dresden-v2025.0/input/oberlausitz-dresden-v2025.0-10pct.plans-initial.xml.gz"/>
+		       value="https://svn.vsp.tu-berlin.de/repos/public-svn/matsim/scenarios/countries/de/oberlausitz-dresden/oberlausitz-dresden-v2025.0/input/oberlausitz-dresden-v2025.0-1pct.plans-initial.xml.gz"/>
 		<param name="removingUnnecessaryPlanAttributes" value="true"/>
 	</module>
 
@@ -225,8 +224,8 @@
 
 	<module name="qsim">
 		<param name="endTime" value="36:00:00"/>
-		<param name="flowCapacityFactor" value="0.1"/>
-		<param name="storageCapacityFactor" value="0.1"/>
+		<param name="flowCapacityFactor" value="0.01"/>
+		<param name="storageCapacityFactor" value="0.01"/>
 		<param name="mainMode" value="car,longDistanceFreight,bike"/>
 		<param name="numberOfThreads" value="6"/>
 		<param name="startTime" value="00:00:00"/>
