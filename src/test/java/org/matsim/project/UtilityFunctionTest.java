@@ -22,7 +22,7 @@ public class UtilityFunctionTest {
     public static void main(String[] args) {
         testHigherCostLowersUtility();
         testHigherTimeLowersUtility();
-        testDeltaPrefersPreviousMode();
+        testDeltaCurrentlyDisabled();
         testSegmentInfluencesAvUtility();
         testProbabilitiesSumToOne();
         testChoiceSetRestriction();
@@ -59,7 +59,15 @@ public class UtilityFunctionTest {
         check("Laengere Reisezeit senkt den Nutzen", slow < fast);
     }
 
-    static void testDeltaPrefersPreviousMode() {
+    /**
+     * delta (Habit) ist in behaviourUtilityFunction.utility(...) derzeit bewusst
+     * auskommentiert (Auftraggeber-Vorgabe: erste Laeufe ohne Habit-Effekt) - dieser
+     * Test dokumentiert genau das (previousMode hat aktuell KEINE Wirkung), statt
+     * die urspruengliche "delta wirkt"-Erwartung stillschweigend fehlschlagen zu
+     * lassen. Sobald der Term dort wieder einkommentiert wird, muss dieser Test
+     * zurueck auf die auskommentierte Variante darunter.
+     */
+    static void testDeltaCurrentlyDisabled() {
         behaviourUtilityFunction f = new behaviourUtilityFunction();
         agentProfile a = neutralAgent();
         modeParams p = avParams();
@@ -68,10 +76,14 @@ public class UtilityFunctionTest {
         double withHabit = f.utility(a, p, t, alternatives.AV);
         double withoutHabit = f.utility(a, p, t, alternatives.CA);
 
-        check("Traegheit erhoeht den Nutzen des zuletzt gewaehlten Modus",
-                withHabit > withoutHabit);
-        check("Traegheitsbonus entspricht delta",
-                near(withHabit - withoutHabit, p.getDelta(alternatives.AV)));
+        check("delta ist aktuell auskommentiert - previousMode aendert den Nutzen nicht",
+                near(withHabit, withoutHabit));
+
+        // Urspruengliche Erwartung bei aktivem delta-Term - siehe Klassen-Javadoc oben:
+        // check("Traegheit erhoeht den Nutzen des zuletzt gewaehlten Modus",
+        //         withHabit > withoutHabit);
+        // check("Traegheitsbonus entspricht delta",
+        //         near(withHabit - withoutHabit, p.getDelta(alternatives.AV)));
     }
 
     static void testSegmentInfluencesAvUtility() {

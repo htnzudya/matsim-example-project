@@ -16,7 +16,7 @@ import java.util.Map;
  *          + beta_inVehicleTime_j * ImFahrzeugZeit(i,j)
  *          + beta_waitTime_j      * Wartezeit(i,j)
  *          + beta_cost_j          * Kosten(i,j)
- *          + delta_{prevMode,j}   * 1[vorheriger Modus gewaehlt]
+ *          + delta_{prevMode,j}   * 1[vorheriger Modus gewaehlt]   -- AKTUELL AUSGEKLAMMERT, siehe utility(...)
  *          + SUM_k gamma_jk       * X*_ik
  *
  * Die Bloecke entsprechen den theoretischen Saeulen der Arbeit:
@@ -24,7 +24,9 @@ import java.util.Map;
  *   beta_inVehicleTime/waitTime/cost - klassische DCM-Level-of-Service-Terme (RUM)
  *   delta                        - Habit Theory / Verhaltenstraegheit; volle
  *                                  Uebergangsmatrix (vorheriger Modus -> j),
- *                                  nicht nur ein Bonus bei Modusbeibehaltung
+ *                                  nicht nur ein Bonus bei Modusbeibehaltung.
+ *                                  DERZEIT DEAKTIVIERT (Auftraggeber-Vorgabe: erste
+ *                                  Laeufe ohne Habit-Effekt) - siehe utility(...)-Javadoc.
  *   gamma * X*                   - TPB (Einstellung, subjektive Norm, PBC),
  *                                  TAM (PEOU, wahrgenommener Nutzen) und
  *                                  Protection Motivation Theory (Risiko-/Sicherheitswahrnehmung, Vertrauen)
@@ -55,7 +57,11 @@ public final class behaviourUtilityFunction {
      * @param profile      Agentenprofil (Segment + latente Konstrukte)
      * @param params       Nutzenparameter der Alternative
      * @param trip         Level-of-Service-Attribute der Alternative
-     * @param previousMode zuletzt gewaehlter Modus (fuer delta); darf null sein
+     * @param previousMode zuletzt gewaehlter Modus - AKTUELL OHNE WIRKUNG, da der
+     *                      delta-Term (Habit) unten auskommentiert ist (siehe dort).
+     *                      Weiterhin Teil der Signatur, damit Aufrufer (behaviour-
+     *                      UtilityEstimator/behaviourCandidateTripInserter) beim
+     *                      Reaktivieren nicht angepasst werden muessen.
      */
     public double utility(agentProfile profile,
                          modeParams params,
@@ -68,9 +74,14 @@ public final class behaviourUtilityFunction {
         v += params.getBetaWaitTime() * trip.waitTimeHours();
         v += params.getBetaCost() * trip.costEuro();
 
-        if (previousMode != null) {
-            v += params.getDelta(previousMode);
-        }
+        // delta (Habit Theory) BEWUSST AUSGEKLAMMERT - Auftraggeber-Vorgabe, erstmal
+        // ohne Verhaltenstraegheit rechnen. previousMode wird dadurch an dieser
+        // Stelle nirgends mehr gelesen; modeParams.getDelta(...)/deltaByPreviousMode
+        // bleiben unangetastet (Config/Parsing unveraendert), damit der Term jederzeit
+        // durch Wiedereinkommentieren der beiden Zeilen unten reaktiviert werden kann.
+        // if (previousMode != null) {
+        //     v += params.getDelta(previousMode);
+        // }
 
         for (Map.Entry<String, Double> entry : params.getGamma().entrySet()) {
             v += entry.getValue() * profile.get(entry.getKey());
