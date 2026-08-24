@@ -186,6 +186,13 @@ ASC_SD = {"CA": 0.0, "AV": 0.60, "PT": 0.50, "PSAV": 0.65, "SSAV": 0.75}
 COST_PER_KM = {"CA": 0.20, "AV": 0.21, "PT": 0.14, "PSAV": 0.38, "SSAV": 0.50}
 BETA_COST_SD = {"CA": 0.05, "AV": 0.05, "PT": 0.06, "PSAV": 0.05, "SSAV": 0.05}
 
+# delta (Habit): einheitlicher Traegheitsbonus, NUR wenn der vorherige Modus mit
+# dem bewerteten Modus identisch war (Diagonaleintrag, siehe modeParams.getDelta-
+# Javadoc) - Auftraggeber-Vorgabe, ersetzt die vormals aus der Excel gelesene
+# volle asymmetrische Vormodus-Uebergangsmatrix (Zeilen 20-24). NICHT aus der
+# Excel, hier als Konstante gepflegt (wie ASC/COST_PER_KM/BETA_COST_SD).
+HABIT_BONUS = 0.831
+
 # costPerKm-Override fuer Personen mit bereits vorhandenem Abo/Zeitkarte (siehe
 # modeParams.costPerKmWithTicket-Javadoc bzw. behaviourConfigGroup.ticketAttribute:
 # Oberlausitz/Dresden liefert das Personenattribut "ptTicket" mit, ~14% der
@@ -296,12 +303,10 @@ def extract_abm(grid):
         beta_wait[mode] = to_float(cell(grid, 18, col_letter)) * MINUTES_TO_HOURS
         beta_wait_sd[mode] = to_float(cell(grid, 19, col_letter)) * MINUTES_TO_HOURS
 
-    # Vormodus-Matrix: Zeilen 20-24 = "Vormodus: <Modus>", Spalten C-G = Zielmodus.
-    prev_mode_rows = {20: "CA", 21: "PT", 22: "AV", 23: "PSAV", 24: "SSAV"}
-    delta_by_previous_mode = {mode: {} for mode in MODES}
-    for row, previous_mode in prev_mode_rows.items():
-        for col_letter, target_mode in MODE_COLUMNS.items():
-            delta_by_previous_mode[target_mode][previous_mode] = to_float(cell(grid, row, col_letter))
+    # delta: nur noch der Diagonaleintrag (Modus -> sich selbst = HABIT_BONUS),
+    # siehe HABIT_BONUS-Konstante oben - kommt NICHT mehr aus der Excel-
+    # Vormodus-Matrix (Zeilen 20-24, wird hier nicht mehr gelesen).
+    delta_by_previous_mode = {mode: {mode: HABIT_BONUS} for mode in MODES}
 
     return {
         "gamma": gamma,

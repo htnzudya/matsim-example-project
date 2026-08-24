@@ -22,7 +22,7 @@ public class UtilityFunctionTest {
     public static void main(String[] args) {
         testHigherCostLowersUtility();
         testHigherTimeLowersUtility();
-        testDeltaCurrentlyDisabled();
+        testDeltaAppliesOnlyForSamePreviousMode();
         testSegmentInfluencesAvUtility();
         testProbabilitiesSumToOne();
         testChoiceSetRestriction();
@@ -62,14 +62,12 @@ public class UtilityFunctionTest {
     }
 
     /**
-     * delta (Habit) ist in behaviourUtilityFunction.utility(...) derzeit bewusst
-     * auskommentiert (Auftraggeber-Vorgabe: erste Laeufe ohne Habit-Effekt) - dieser
-     * Test dokumentiert genau das (previousMode hat aktuell KEINE Wirkung), statt
-     * die urspruengliche "delta wirkt"-Erwartung stillschweigend fehlschlagen zu
-     * lassen. Sobald der Term dort wieder einkommentiert wird, muss dieser Test
-     * zurueck auf die auskommentierte Variante darunter.
+     * delta (Habit) ist wieder aktiv (siehe behaviourUtilityFunction-Klassen-
+     * Javadoc): nur noch der Diagonaleintrag (Modus -> sich selbst), kein
+     * Bonus bei unterschiedlichem Vor-/Zielmodus mehr. avParams() traegt
+     * genau das (deltaByPreviousMode = {"AV": 0.40}, siehe Fixture unten).
      */
-    static void testDeltaCurrentlyDisabled() {
+    static void testDeltaAppliesOnlyForSamePreviousMode() {
         behaviourUtilityFunction f = new behaviourUtilityFunction();
         agentProfile a = neutralAgent();
         modeParams p = avParams();
@@ -78,14 +76,12 @@ public class UtilityFunctionTest {
         double withHabit = f.utility(a, p, t, alternatives.AV);
         double withoutHabit = f.utility(a, p, t, alternatives.CA);
 
-        check("delta ist aktuell auskommentiert - previousMode aendert den Nutzen nicht",
-                near(withHabit, withoutHabit));
-
-        // Urspruengliche Erwartung bei aktivem delta-Term - siehe Klassen-Javadoc oben:
-        // check("Traegheit erhoeht den Nutzen des zuletzt gewaehlten Modus",
-        //         withHabit > withoutHabit);
-        // check("Traegheitsbonus entspricht delta",
-        //         near(withHabit - withoutHabit, p.getDelta(alternatives.AV)));
+        check("Traegheit erhoeht den Nutzen, wenn der vorherige Modus mit dem bewerteten identisch war",
+                withHabit > withoutHabit);
+        check("Traegheitsbonus entspricht delta (Diagonaleintrag)",
+                near(withHabit - withoutHabit, p.getDelta(alternatives.AV)));
+        check("Kein Bonus, wenn der vorherige Modus ein ANDERER war (kein Diagonaleintrag)",
+                near(withoutHabit, f.utility(a, p, t, null)));
     }
 
     static void testSegmentInfluencesAvUtility() {

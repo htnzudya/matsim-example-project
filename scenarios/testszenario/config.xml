@@ -23,9 +23,12 @@
          hier auf je Stunde umgerechnet (x60) - Code/TripContext arbeiten
          durchgaengig mit Stunden.
 
-         deltaByPreviousMode: volle Vormodus-Uebergangsmatrix aus der Excel
-         (vorheriger Modus -> Traegheitsbonus fuer DIESEN Zielmodus), nicht
-         nur ein Bonus bei Modusbeibehaltung.
+         deltaByPreviousMode: NICHT mehr die volle asymmetrische Vormodus-
+         Uebergangsmatrix aus der Excel, sondern nur noch der Diagonaleintrag
+         (Modus -> sich selbst) mit einem einheitlichen Traegheitsbonus 0.831
+         (Auftraggeber-Vorgabe) - jedes ModeParamSet traegt nur seinen eigenen
+         Eintrag, alle anderen fehlen und liefern 0.0 (siehe modeParams.
+         getDelta-Javadoc).
 
          Konstrukte: 11 SLR-Konstrukte (TAM/TPB/PMT), identisch benannt in
          gamma (fertigeabmparameter.xlsx, Konstrukt x Modus) und constructs/
@@ -259,7 +262,7 @@
             <param name="betaCostHochSd" value="0.05"/>
             <param name="costPerKm" value="0.2"/>
             <param name="costPerKmWithTicket" value="-1"/>
-            <param name="deltaByPreviousMode" value="CA=1.73,AV=0.45,PT=0,PSAV=0,SSAV=0.45"/>
+            <param name="deltaByPreviousMode" value="CA=0.831,AV=0,PT=0,PSAV=0,SSAV=0"/>
             <param name="gamma" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=-0.2,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0.4,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
@@ -280,7 +283,7 @@
             <param name="betaCostHochSd" value="0.05"/>
             <param name="costPerKm" value="0.21"/>
             <param name="costPerKmWithTicket" value="-1"/>
-            <param name="deltaByPreviousMode" value="CA=0.95,AV=1.73,PT=0,PSAV=0.45,SSAV=0.45"/>
+            <param name="deltaByPreviousMode" value="CA=0,AV=0.831,PT=0,PSAV=0,SSAV=0"/>
             <param name="gamma" value="techAffinity=0.1,environmentalAwareness=0.2,sharingWillingness=-0.4,drivingEnjoyment=-0.1,perceivedUsefulness=0.2,perceivedEaseOfUse=0.1,trust=0.4,safetyPerception=0.2,perceivedRisk=-0.2,perceivedBehaviouralControl=0.2,socialNorm=0.2"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
@@ -301,7 +304,7 @@
             <param name="betaCostHochSd" value="0.06"/>
             <param name="costPerKm" value="0.14"/>
             <param name="costPerKmWithTicket" value="0"/>
-            <param name="deltaByPreviousMode" value="CA=0,AV=0,PT=0.85,PSAV=0.45,SSAV=0"/>
+            <param name="deltaByPreviousMode" value="CA=0,AV=0,PT=0.831,PSAV=0,SSAV=0"/>
             <param name="gamma" value="techAffinity=0,environmentalAwareness=0.1,sharingWillingness=0,drivingEnjoyment=-0.2,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0.4,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
@@ -322,7 +325,7 @@
             <param name="betaCostHochSd" value="0.05"/>
             <param name="costPerKm" value="0.38"/>
             <param name="costPerKmWithTicket" value="-1"/>
-            <param name="deltaByPreviousMode" value="CA=0.63,AV=0.45,PT=0.95,PSAV=1.73,SSAV=0.95"/>
+            <param name="deltaByPreviousMode" value="CA=0,AV=0,PT=0,PSAV=0.831,SSAV=0"/>
             <param name="gamma" value="techAffinity=0.4,environmentalAwareness=0,sharingWillingness=0.2,drivingEnjoyment=-0.2,perceivedUsefulness=0.2,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0.4"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
@@ -343,7 +346,7 @@
             <param name="betaCostHochSd" value="0.05"/>
             <param name="costPerKm" value="0.5"/>
             <param name="costPerKmWithTicket" value="-1"/>
-            <param name="deltaByPreviousMode" value="CA=0.95,AV=0.45,PT=0.45,PSAV=0.95,SSAV=1.73"/>
+            <param name="deltaByPreviousMode" value="CA=0,AV=0,PT=0,PSAV=0,SSAV=0.831"/>
             <param name="gamma" value="techAffinity=0.2,environmentalAwareness=0.1,sharingWillingness=0.4,drivingEnjoyment=-0.2,perceivedUsefulness=0.4,perceivedEaseOfUse=0.1,trust=0.4,safetyPerception=0.4,perceivedRisk=-0.2,perceivedBehaviouralControl=0.4,socialNorm=0.4"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
