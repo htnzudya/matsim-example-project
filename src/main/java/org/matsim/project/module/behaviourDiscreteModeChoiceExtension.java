@@ -6,6 +6,7 @@ import java.util.stream.Collectors;
 
 import org.matsim.contribs.discrete_mode_choice.modules.AbstractDiscreteModeChoiceExtension;
 import org.matsim.project.model.alternatives;
+import org.matsim.project.scoring.behaviourCachedTripEstimator;
 import org.matsim.project.scoring.behaviourUtilityEstimator;
 
 import com.google.inject.Provides;
@@ -13,7 +14,16 @@ import com.google.inject.Singleton;
 
 /**
  * Registriert die Add-on-eigenen DMC-Komponenten unter dem Namen "verhalten":
- *  - behaviourUtilityEstimator als TripEstimator
+ *  - behaviourCachedTripEstimator als TripEstimator (umhuellt behaviourUtilityEstimator
+ *    mit einer threadsicheren Cache-Schicht, siehe dortigen Klassen-Javadoc - ersetzt
+ *    das entfernte DiscreteModeChoiceConfigGroup.setCachedModes(...)). BEWUSST OHNE
+ *    .in(Singleton.class) gebunden - genau wie DMCs eigenes EstimatorModule.
+ *    provideTripEstimator(...) seinen CachedTripEstimator undekoriert bindet: bei
+ *    jeder Injektion entsteht eine neue Instanz mit leerem Cache. Mit Singleton-Scope
+ *    wuerde der Cache ueber den GESAMTEN Lauf (alle Iterationen, alle Threads) nie
+ *    geleert - beobachtet als OutOfMemoryError bereits in Iteration 1, da Millionen
+ *    gerouteter TripCandidate-Objekte auf dem grossen Strassen-/OEPNV-Netz nie wieder
+ *    freigegeben wurden.
  *  - behaviourModeAvailability als ModeAvailability (Fuehrerschein-/Fahrzeug-
  *    zugangs-Constraint fuer CA/AV, siehe dortigen Javadoc)
  *  - behaviourNonDcmModeTourFilter als TourFilter (schliesst BIKE/WALK/RIDE-
@@ -28,7 +38,8 @@ public final class behaviourDiscreteModeChoiceExtension extends AbstractDiscrete
 
     @Override
     protected void installExtension() {
-        bindTripEstimator(TRIP_ESTIMATOR_NAME).to(behaviourUtilityEstimator.class);
+        bind(behaviourUtilityEstimator.class);
+        bindTripEstimator(TRIP_ESTIMATOR_NAME).to(behaviourCachedTripEstimator.class);
         bindModeAvailability(MODE_AVAILABILITY_NAME).to(behaviourModeAvailability.class);
         bindTourFilter(TOUR_FILTER_NAME).to(behaviourNonDcmModeTourFilter.class);
     }
