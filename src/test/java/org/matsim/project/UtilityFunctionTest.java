@@ -27,6 +27,8 @@ public class UtilityFunctionTest {
         testProbabilitiesSumToOne();
         testChoiceSetRestriction();
         testZeroSdGivesDeterministicResult();
+        testIncomeTierThresholds();
+        testDrawSelectsIncomeTierBetaCost();
 
         System.out.println();
         System.out.println("Bestanden: " + passed + " / Fehlgeschlagen: " + failed);
@@ -147,6 +149,38 @@ public class UtilityFunctionTest {
 
         check("Bei SD=0 liefern alle Ziehungen identische Koeffizienten (MNL-Grenzfall)",
                 near(z1.getAsc(), z2.getAsc()) && near(z1.getBetaInVehicleTime(), z2.getBetaInVehicleTime()));
+    }
+
+    static void testIncomeTierThresholds() {
+        check("hhIncome=3 (Grenzfall) ist NIEDRIG",
+                incomeTier.fromHhIncome(3, 3, 8) == incomeTier.NIEDRIG);
+        check("hhIncome=4 ist MITTEL",
+                incomeTier.fromHhIncome(4, 3, 8) == incomeTier.MITTEL);
+        check("hhIncome=7 ist MITTEL",
+                incomeTier.fromHhIncome(7, 3, 8) == incomeTier.MITTEL);
+        check("hhIncome=8 (Grenzfall) ist HOCH",
+                incomeTier.fromHhIncome(8, 3, 8) == incomeTier.HOCH);
+    }
+
+    static void testDrawSelectsIncomeTierBetaCost() {
+        // SD=0 fuer alle drei Stufen, damit draw(...) den Mittelwert unveraendert durchreicht.
+        modeParams p = new modeParams(alternatives.AV,
+                -0.5, 0.0, -4.5, 0.0, 0.0, 0.0,
+                -0.806, 0.0, -0.991, 0.0, -0.561, 0.0,
+                0.2, modeParams.NO_TICKET_OVERRIDE,
+                Map.of(), Map.of("AV", 0.4), Map.of());
+
+        double niedrig = p.draw(new Random(1), incomeTier.NIEDRIG).getBetaCost();
+        double mittel = p.draw(new Random(1), incomeTier.MITTEL).getBetaCost();
+        double hoch = p.draw(new Random(1), incomeTier.HOCH).getBetaCost();
+
+        check("draw(NIEDRIG) liefert betaCostNiedrig", near(niedrig, -0.991));
+        check("draw(MITTEL) liefert betaCost", near(mittel, -0.806));
+        check("draw(HOCH) liefert betaCostHoch", near(hoch, -0.561));
+        check("Niedriges Einkommen ist preissensitiver (betragsmaessig groesser) als hohes",
+                Math.abs(niedrig) > Math.abs(hoch));
+        check("draw(Random) ohne incomeTier verhaelt sich wie draw(Random, MITTEL)",
+                near(p.draw(new Random(1)).getBetaCost(), mittel));
     }
 
     // ------------------------------------------------------------ Fixtures

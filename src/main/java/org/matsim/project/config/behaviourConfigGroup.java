@@ -6,6 +6,7 @@ import org.matsim.core.config.ConfigGroup;
 import org.matsim.core.config.ReflectiveConfigGroup;
 import org.matsim.project.model.alternatives;
 import org.matsim.project.model.agentProfile;
+import org.matsim.project.model.incomeTier;
 import org.matsim.project.model.modeParams;
 import org.matsim.project.model.segmentClassifier;
 
@@ -98,6 +99,22 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
      * automatischen Doppellaufs ueber beide Welten.
      */
     private String kandidatenwegWelt = "avm";
+
+    /**
+     * Schwellenwerte fuer die Zuordnung der hhIncome-Klasse (1-10, VSP-
+     * Population, siehe incomeTier-Klassen-Javadoc) auf NIEDRIG/MITTEL/HOCH:
+     * hhIncome &lt;= einkommenSchwelleNiedrigMax -&gt; NIEDRIG, hhIncome &gt;=
+     * einkommenSchwelleHochMin -&gt; HOCH, sonst MITTEL. Steuert, welcher der
+     * drei betaCost-Werte (ModeParamSet.betaCost/-Niedrig/-Hoch) fuer einen
+     * Agenten gezogen wird (siehe modeParams.draw(Random, incomeTier)).
+     *
+     * Defaults 3/8: an der realen Verteilung der Oberlausitz/Dresden-
+     * Population orientiert (10pct-Lauf, 112.952 Agenten) - Klassen 1-3
+     * zusammen ~10,4% der Agenten, Klassen 8-10 zusammen ~14,5%, Klassen 4-7
+     * (Mehrheit, ~75,1%) als "mittel". Kein amtlicher MiD/SrV-Schwellenwert.
+     */
+    private double einkommenSchwelleNiedrigMax = 3.0;
+    private double einkommenSchwelleHochMin = 8.0;
 
     /**
      * Name des Person-Attributs, das ein bereits vorhandenes Abo/Zeitkarte
@@ -211,6 +228,29 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
         return ticketOwnedValue.equals(value == null ? null : value.toString());
     }
 
+    /**
+     * Einkommensstufe der Person fuer die Kostensensitivitaet (siehe
+     * incomeTier-Klassen-Javadoc, einkommenSchwelleNiedrigMax/-HochMin-Feld-
+     * Javadoc). Liest das Personenattribut "hhIncome" direkt (wie
+     * RunOberlausitzDresdenTest.extractCovariates - dieselbe VSP-Konvention,
+     * kein eigener Konfigurationsschluessel dafuer noetig). Fehlt das
+     * Attribut oder ist es nicht numerisch, wird defensiv MITTEL angenommen
+     * (kein Absturz waehrend der laufenden Simulation/Umplanung) statt wie
+     * bei der einmaligen Segment-Zuordnung beim Start hart abzubrechen.
+     */
+    public incomeTier resolveIncomeTier(Person person) {
+        Object value = person.getAttributes().getAttribute("hhIncome");
+        if (value == null) {
+            return incomeTier.MITTEL;
+        }
+        try {
+            double hhIncome = value instanceof Number number ? number.doubleValue() : Double.parseDouble(value.toString());
+            return incomeTier.fromHhIncome(hhIncome, einkommenSchwelleNiedrigMax, einkommenSchwelleHochMin);
+        } catch (NumberFormatException e) {
+            return incomeTier.MITTEL;
+        }
+    }
+
     /** Name des Person-Attributs, in dem das Segment eines Agenten steht. */
     @StringGetter("segmentAttribute")
     public String getSegmentAttribute() {
@@ -264,6 +304,27 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     @StringSetter("kandidatenwegWelt")
     public void setKandidatenwegWelt(String kandidatenwegWelt) {
         this.kandidatenwegWelt = kandidatenwegWelt;
+    }
+
+    /** Siehe einkommenSchwelleNiedrigMax-Feld-Javadoc. */
+    @StringGetter("einkommenSchwelleNiedrigMax")
+    public double getEinkommenSchwelleNiedrigMax() {
+        return einkommenSchwelleNiedrigMax;
+    }
+
+    @StringSetter("einkommenSchwelleNiedrigMax")
+    public void setEinkommenSchwelleNiedrigMax(double einkommenSchwelleNiedrigMax) {
+        this.einkommenSchwelleNiedrigMax = einkommenSchwelleNiedrigMax;
+    }
+
+    @StringGetter("einkommenSchwelleHochMin")
+    public double getEinkommenSchwelleHochMin() {
+        return einkommenSchwelleHochMin;
+    }
+
+    @StringSetter("einkommenSchwelleHochMin")
+    public void setEinkommenSchwelleHochMin(double einkommenSchwelleHochMin) {
+        this.einkommenSchwelleHochMin = einkommenSchwelleHochMin;
     }
 
     @StringGetter("classifierWeightAge")
@@ -372,6 +433,18 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
         private double betaCost = 0.0;
         private double betaCostSd = 0.0;
 
+        /**
+         * betaCost/-Sd fuer NIEDRIGE/HOHE Einkommensklasse (siehe incomeTier-
+         * Klassen-Javadoc, fertigeabmparameter.xlsx Zeilen 14/15). Default NaN =
+         * "nicht konfiguriert" -&gt; toModeParams() faellt dann auf betaCost/
+         * betaCostSd (mittel) zurueck, damit bestehende Configs ohne diese vier
+         * Parameter unveraendert funktionieren (keine Einkommensdifferenzierung).
+         */
+        private double betaCostNiedrig = Double.NaN;
+        private double betaCostNiedrigSd = Double.NaN;
+        private double betaCostHoch = Double.NaN;
+        private double betaCostHochSd = Double.NaN;
+
         /** Tarif-/Betriebskostensatz in Euro/km, keine Streuung (siehe modeParams-Javadoc). */
         private double costPerKm = 0.0;
 
@@ -459,6 +532,30 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
         @StringSetter("betaCostSd")
         public void setBetaCostSd(double betaCostSd) { this.betaCostSd = betaCostSd; }
 
+        @StringGetter("betaCostNiedrig")
+        public double getBetaCostNiedrig() { return betaCostNiedrig; }
+
+        @StringSetter("betaCostNiedrig")
+        public void setBetaCostNiedrig(double betaCostNiedrig) { this.betaCostNiedrig = betaCostNiedrig; }
+
+        @StringGetter("betaCostNiedrigSd")
+        public double getBetaCostNiedrigSd() { return betaCostNiedrigSd; }
+
+        @StringSetter("betaCostNiedrigSd")
+        public void setBetaCostNiedrigSd(double betaCostNiedrigSd) { this.betaCostNiedrigSd = betaCostNiedrigSd; }
+
+        @StringGetter("betaCostHoch")
+        public double getBetaCostHoch() { return betaCostHoch; }
+
+        @StringSetter("betaCostHoch")
+        public void setBetaCostHoch(double betaCostHoch) { this.betaCostHoch = betaCostHoch; }
+
+        @StringGetter("betaCostHochSd")
+        public double getBetaCostHochSd() { return betaCostHochSd; }
+
+        @StringSetter("betaCostHochSd")
+        public void setBetaCostHochSd(double betaCostHochSd) { this.betaCostHochSd = betaCostHochSd; }
+
         @StringGetter("costPerKm")
         public double getCostPerKm() { return costPerKm; }
 
@@ -500,6 +597,10 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
                     betaInVehicleTime, betaInVehicleTimeSd,
                     betaWaitTime, betaWaitTimeSd,
                     betaCost, betaCostSd,
+                    Double.isNaN(betaCostNiedrig) ? betaCost : betaCostNiedrig,
+                    Double.isNaN(betaCostNiedrigSd) ? betaCostSd : betaCostNiedrigSd,
+                    Double.isNaN(betaCostHoch) ? betaCost : betaCostHoch,
+                    Double.isNaN(betaCostHochSd) ? betaCostSd : betaCostHochSd,
                     costPerKm, costPerKmWithTicket,
                     parseMap(deltaByPreviousMode),
                     parseMap(gamma),

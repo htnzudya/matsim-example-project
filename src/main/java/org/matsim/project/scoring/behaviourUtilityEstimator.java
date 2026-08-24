@@ -147,7 +147,8 @@ public class behaviourUtilityEstimator extends AbstractTripRouterEstimator {
         // Modus geseedet (eine Person hat nur EIN Set latenter Konstrukte), params
         // dagegen schon (Koeffizienten-Abweichungen duerfen je Modus unabhaengig sein).
         agentProfile profile = resolveProfile(person).draw(new Random(personSeed(person, "profile")));
-        modeParams params = meanParams.draw(new Random(personSeed(person, alternative.name())));
+        modeParams params = meanParams.draw(
+                new Random(personSeed(person, alternative.name())), cfg.resolveIncomeTier(person));
 
         // Abo-/Zeitkarten-Inhaber (siehe modeParams.costPerKmWithTicket-Javadoc):
         // effektive Grenzkosten statt des vollen Distanztarifs, falls fuer diesen

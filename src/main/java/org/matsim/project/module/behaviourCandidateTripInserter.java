@@ -441,7 +441,8 @@ public final class behaviourCandidateTripInserter implements StartupListener {
 
                 modeParams meanParams = modeParamsByAlternative.get(alternative);
                 modeParams params = meanParams.draw(
-                        new Random(tripContextBuilder.personSeed(randomSeed, person.getId(), alternative.name())));
+                        new Random(tripContextBuilder.personSeed(randomSeed, person.getId(), alternative.name())),
+                        cfg.resolveIncomeTier(person));
 
                 List<? extends PlanElement> routed;
                 try {
@@ -714,7 +715,8 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                 }
                 modeParams meanParams = modeParamsByAlternative.get(alternative);
                 modeParams params = meanParams.draw(
-                        new Random(tripContextBuilder.personSeed(randomSeed, person.getId(), alternative.name())));
+                        new Random(tripContextBuilder.personSeed(randomSeed, person.getId(), alternative.name())),
+                        cfg.resolveIncomeTier(person));
                 List<? extends PlanElement> routed;
                 try {
                     routed = tripRouter.calcRoute(alternative.getMatsimMode(), originFacility, destinationFacility,

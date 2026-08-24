@@ -33,9 +33,28 @@ public final class modeParams {
     private final double betaWaitTime;
     private final double betaWaitTimeSd;
 
-    /** Grenznutzen der Kosten, in Nutzeneinheiten pro Euro (i. d. R. negativ). */
+    /**
+     * Grenznutzen der Kosten fuer die MITTLERE Einkommensklasse, in
+     * Nutzeneinheiten pro Euro (i. d. R. negativ) - siehe incomeTier-Klassen-
+     * Javadoc und fertigeabmparameter.xlsx Zeile 13 ("mittleres Einkommen").
+     * Bleibt der Feldname ohne "Mittel"-Suffix (Abwaertskompatibilitaet: vor
+     * der Einkommensdifferenzierung war das der einzige betaCost-Wert).
+     */
     private final double betaCost;
     private final double betaCostSd;
+
+    /**
+     * Grenznutzen der Kosten fuer NIEDRIGE/HOHE Einkommensklasse (Excel-Zeilen
+     * 15/14) - siehe incomeTier-Klassen-Javadoc. draw(Random, incomeTier)
+     * waehlt je nach hhIncome-Klasse des Agenten eines der drei Paare
+     * (betaCost/-Sd, betaCostNiedrig/-Sd, betaCostHoch/-Sd) fuer die
+     * Mixed-Logit-Ziehung aus - betaCost selbst bleibt dabei unveraendert
+     * MITTEL, kein Ersetzen/Ueberschreiben.
+     */
+    private final double betaCostNiedrig;
+    private final double betaCostNiedrigSd;
+    private final double betaCostHoch;
+    private final double betaCostHochSd;
 
     /**
      * Tarif-/LOS-Parameter, KEIN Verhaltenskoeffizient: Kosten pro Kilometer in
@@ -110,12 +129,39 @@ public final class modeParams {
                 deltaByPreviousMode, gamma, Map.of());
     }
 
-    /** Voller Konstruktor inkl. costPerKmWithTicket, siehe Feld-Javadoc. */
+    /**
+     * Voller Konstruktor inkl. costPerKmWithTicket, siehe Feld-Javadoc. Ohne
+     * explizite betaCostNiedrig/-Hoch-Werte - delegiert mit betaCost/betaCostSd
+     * fuer alle drei Einkommensstufen (Abwaertskompatibilitaet: keine
+     * Einkommensdifferenzierung, wie vor incomeTier).
+     */
     public modeParams(alternatives mode,
                       double asc, double ascSd,
                       double betaInVehicleTime, double betaInVehicleTimeSd,
                       double betaWaitTime, double betaWaitTimeSd,
                       double betaCost, double betaCostSd,
+                      double costPerKm, double costPerKmWithTicket,
+                      Map<String, Double> deltaByPreviousMode,
+                      Map<String, Double> gamma,
+                      Map<String, Double> gammaSd) {
+        this(mode, asc, ascSd, betaInVehicleTime, betaInVehicleTimeSd,
+                betaWaitTime, betaWaitTimeSd, betaCost, betaCostSd,
+                betaCost, betaCostSd, betaCost, betaCostSd,
+                costPerKm, costPerKmWithTicket,
+                deltaByPreviousMode, gamma, gammaSd);
+    }
+
+    /**
+     * Voller Konstruktor inkl. Einkommensdifferenzierung der Kosten (siehe
+     * incomeTier-Klassen-Javadoc und betaCostNiedrig/-Hoch-Feld-Javadoc).
+     */
+    public modeParams(alternatives mode,
+                      double asc, double ascSd,
+                      double betaInVehicleTime, double betaInVehicleTimeSd,
+                      double betaWaitTime, double betaWaitTimeSd,
+                      double betaCost, double betaCostSd,
+                      double betaCostNiedrig, double betaCostNiedrigSd,
+                      double betaCostHoch, double betaCostHochSd,
                       double costPerKm, double costPerKmWithTicket,
                       Map<String, Double> deltaByPreviousMode,
                       Map<String, Double> gamma,
@@ -128,6 +174,10 @@ public final class modeParams {
         this.betaWaitTime = betaWaitTime;
         this.betaWaitTimeSd = betaWaitTimeSd;
         this.betaCost = betaCost;
+        this.betaCostNiedrig = betaCostNiedrig;
+        this.betaCostNiedrigSd = betaCostNiedrigSd;
+        this.betaCostHoch = betaCostHoch;
+        this.betaCostHochSd = betaCostHochSd;
         this.betaCostSd = betaCostSd;
         this.costPerKm = costPerKm;
         this.costPerKmWithTicket = costPerKmWithTicket;
@@ -154,6 +204,23 @@ public final class modeParams {
 
     public double getBetaCost() {
         return betaCost;
+    }
+
+    /** Grenznutzen der Kosten (Mittelwert der Ziehung, VOR Mixed-Logit-Streuung) fuer die gegebene Einkommensstufe - siehe incomeTier-Klassen-Javadoc. */
+    public double getBetaCost(incomeTier tier) {
+        return switch (tier) {
+            case NIEDRIG -> betaCostNiedrig;
+            case HOCH -> betaCostHoch;
+            case MITTEL -> betaCost;
+        };
+    }
+
+    private double getBetaCostSd(incomeTier tier) {
+        return switch (tier) {
+            case NIEDRIG -> betaCostNiedrigSd;
+            case HOCH -> betaCostHochSd;
+            case MITTEL -> betaCostSd;
+        };
     }
 
     public double getCostPerKm() {
@@ -199,27 +266,45 @@ public final class modeParams {
     }
 
     /**
+     * Zieht agentenindividuelle Koeffizienten aus N(mean, sd), betaCost fuer
+     * die MITTLERE Einkommensstufe (siehe incomeTier-Klassen-Javadoc) - Bequem-
+     * lichkeitsueberladung fuer Aufrufer, die (noch) keine Einkommensstufe
+     * kennen. Ansonsten identisch zu draw(Random, incomeTier), siehe dortigen
+     * Javadoc.
+     */
+    public modeParams draw(Random random) {
+        return draw(random, incomeTier.MITTEL);
+    }
+
+    /**
      * Zieht agentenindividuelle Koeffizienten aus N(mean, sd).
      * Pro Agent EINMAL aufrufen und das Ergebnis festhalten - nicht pro Weg,
      * sonst waere die Praeferenz eines Agenten nicht stabil.
+     *
+     * betaCost wird aus dem zu tier passenden Mittelwert/Streuung-Paar gezogen
+     * (siehe getBetaCost(incomeTier)/getBetaCostSd(incomeTier)) - alle anderen
+     * Koeffizienten sind von der Einkommensstufe unabhaengig, wie in der
+     * fertigeabmparameter.xlsx vorgegeben (nur beta_Kosten ist dort nach
+     * Einkommen differenziert).
      *
      * Bei allen Streuungen = 0 gibt die Methode identische Werte zurueck
      * (das Modell degeneriert dann sauber zum MNL). deltaByPreviousMode und
      * costPerKm werden nicht gezogen (costPerKm ist ein Tarif-/LOS-Parameter,
      * keine Praeferenz; fuer deltaByPreviousMode liegen keine SD-Daten vor).
      */
-    public modeParams draw(Random random) {
+    public modeParams draw(Random random, incomeTier tier) {
         Map<String, Double> drawnGamma = new LinkedHashMap<>();
         for (Map.Entry<String, Double> entry : gamma.entrySet()) {
             double sd = getGammaSd(entry.getKey());
             drawnGamma.put(entry.getKey(), entry.getValue() + sd * random.nextGaussian());
         }
+        double drawnBetaCost = getBetaCost(tier) + getBetaCostSd(tier) * random.nextGaussian();
         return new modeParams(
                 mode,
                 asc + ascSd * random.nextGaussian(), 0.0,
                 betaInVehicleTime + betaInVehicleTimeSd * random.nextGaussian(), 0.0,
                 betaWaitTime + betaWaitTimeSd * random.nextGaussian(), 0.0,
-                betaCost + betaCostSd * random.nextGaussian(), 0.0,
+                drawnBetaCost, 0.0,
                 costPerKm, costPerKmWithTicket,
                 deltaByPreviousMode,
                 drawnGamma,

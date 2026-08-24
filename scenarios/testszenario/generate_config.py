@@ -33,9 +33,14 @@ carAffinity stimmen zahlenwertgleich mit Umweltbewusstsein/Sharing-
 Bereitschaft/Fahrfreude aus der finalen Segmentierungstabelle ueberein).
 
 Kosten: die Excel gibt beta_Kosten je Einkommensklasse (niedrig/mittel/
-hoch), aber denselben Wert ueber alle Modi hinweg. Auf Wunsch wird hier
-bewusst NUR die Spalte "mittleres Einkommen" uebernommen; ein eigenes
-Einkommenskonzept im Code gibt es (noch) nicht.
+hoch), aber denselben Wert ueber alle Modi hinweg. Alle drei Spalten werden
+uebernommen (betaCost/-Niedrig/-Hoch, siehe modeParams/incomeTier-Klassen-
+Javadoc) - modeParams.draw(Random, incomeTier) waehlt je nach hhIncome-
+Klasse des Agenten (behaviourConfigGroup.resolveIncomeTier, Schwellenwerte
+einkommenSchwelleNiedrigMax/-HochMin) eines der drei Paare fuer die
+Mixed-Logit-Ziehung. betaCostSd wird fuer alle drei Stufen wiederverwendet
+(BETA_COST_SD je Modus) - die Excel liefert keine separate Streuung je
+Einkommensklasse.
 """
 
 import re
@@ -266,15 +271,20 @@ def extract_abm(grid):
         for col_letter, mode in MODE_COLUMNS.items():
             gamma[mode][construct] = to_float(cell(grid, row, col_letter))
 
-    # beta_Kosten: nur "mittleres Einkommen" (Zeile 13), identisch ueber alle Modi -
-    # zur Absicherung gegen die Excel pruefen statt den Wert nur einmal zu lesen.
-    beta_cost_values = {mode: to_float(cell(grid, 13, col_letter))
-                         for col_letter, mode in MODE_COLUMNS.items()}
-    distinct = set(beta_cost_values.values())
-    if len(distinct) != 1:
-        raise ValueError(f"beta_Kosten (mittleres Einkommen) ist nicht ueber alle Modi "
-                          f"identisch, wie erwartet: {beta_cost_values}")
-    beta_cost = distinct.pop()
+    # beta_Kosten: Zeilen 13/14/15 = mittleres/hohes/niedriges Einkommen, je
+    # identisch ueber alle Modi - zur Absicherung gegen die Excel pruefen statt
+    # den Wert nur einmal je Zeile zu lesen.
+    def read_uniform_beta_cost(row, label):
+        values = {mode: to_float(cell(grid, row, col_letter)) for col_letter, mode in MODE_COLUMNS.items()}
+        distinct = set(values.values())
+        if len(distinct) != 1:
+            raise ValueError(f"beta_Kosten ({label}) ist nicht ueber alle Modi identisch, "
+                              f"wie erwartet: {values}")
+        return distinct.pop()
+
+    beta_cost = read_uniform_beta_cost(13, "mittleres Einkommen")
+    beta_cost_hoch = read_uniform_beta_cost(14, "hohes Einkommen")
+    beta_cost_niedrig = read_uniform_beta_cost(15, "niedriges Einkommen")
 
     beta_ivt = {}
     beta_ivt_sd = {}
@@ -296,6 +306,8 @@ def extract_abm(grid):
     return {
         "gamma": gamma,
         "beta_cost": beta_cost,
+        "beta_cost_niedrig": beta_cost_niedrig,
+        "beta_cost_hoch": beta_cost_hoch,
         "beta_ivt": beta_ivt,
         "beta_ivt_sd": beta_ivt_sd,
         "beta_wait": beta_wait,
@@ -350,6 +362,10 @@ def render_mode_param_set(mode, data):
             <param name="betaWaitTimeSd" value="{fmt(data['beta_wait_sd'][mode])}"/>
             <param name="betaCost" value="{fmt(data['beta_cost'])}"/>
             <param name="betaCostSd" value="{fmt(BETA_COST_SD[mode])}"/>
+            <param name="betaCostNiedrig" value="{fmt(data['beta_cost_niedrig'])}"/>
+            <param name="betaCostNiedrigSd" value="{fmt(BETA_COST_SD[mode])}"/>
+            <param name="betaCostHoch" value="{fmt(data['beta_cost_hoch'])}"/>
+            <param name="betaCostHochSd" value="{fmt(BETA_COST_SD[mode])}"/>
             <param name="costPerKm" value="{fmt(COST_PER_KM[mode])}"/>
             <param name="costPerKmWithTicket" value="{fmt(COST_PER_KM_WITH_TICKET[mode])}"/>
             <param name="deltaByPreviousMode" value="{render_map(MODES, data['delta_by_previous_mode'][mode])}"/>
@@ -396,10 +412,11 @@ def render_module(abm_data, segments):
          NICHT VON HAND BEARBEITEN. Werte aendern: Excel bearbeiten, dann
          `python3 scenarios/testszenario/generate_config.py`.
 
-         Kosten (betaCost): nur die Excel-Spalte "mittleres Einkommen"
-         uebernommen (niedrig/hoch verworfen) - es gibt (noch) kein
-         Einkommenskonzept im Code, betaCost ist weiterhin ein einzelner
-         Wert je Modus.
+         Kosten (betaCost/-Niedrig/-Hoch): alle drei Excel-Einkommensspalten
+         uebernommen (mittleres/niedriges/hohes Einkommen) - modeParams.draw
+         (Random, incomeTier) waehlt je nach hhIncome-Klasse des Agenten
+         (behaviourConfigGroup.resolveIncomeTier) das passende Paar fuer die
+         Mixed-Logit-Ziehung, siehe incomeTier-Klassen-Javadoc.
 
          Zeit (betaInVehicleTime/betaWaitTime): Excel gibt je Minute an,
          hier auf je Stunde umgerechnet (x60) - Code/TripContext arbeiten

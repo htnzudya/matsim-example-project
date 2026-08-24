@@ -10,10 +10,14 @@
          NICHT VON HAND BEARBEITEN. Werte aendern: Excel bearbeiten, dann
          `python3 scenarios/testszenario/generate_config.py`.
 
-         Kosten (betaCost): nur die Excel-Spalte "mittleres Einkommen"
-         uebernommen (niedrig/hoch verworfen) - es gibt (noch) kein
-         Einkommenskonzept im Code, betaCost ist weiterhin ein einzelner
-         Wert je Modus.
+         Kosten (betaCost/-Niedrig/-Hoch): alle drei Excel-Einkommensspalten
+         uebernommen (mittleres/niedriges/hohes Einkommen) - modeParams.draw
+         (Random, incomeTier) waehlt je nach hhIncome-Klasse des Agenten
+         (behaviourConfigGroup.resolveIncomeTier, Schwellenwerte
+         einkommenSchwelleNiedrigMax/-HochMin unten) das passende Paar fuer
+         die Mixed-Logit-Ziehung, siehe incomeTier-Klassen-Javadoc.
+         betaCostNiedrigSd/betaCostHochSd nutzen dieselbe Streuung wie
+         betaCostSd (Excel liefert keine eigene Streuung je Einkommensklasse).
 
          Zeit (betaInVehicleTime/betaWaitTime): Excel gibt je Minute an,
          hier auf je Stunde umgerechnet (x60) - Code/TripContext arbeiten
@@ -38,6 +42,15 @@
         <param name="scaleParameter" value="1.0"/>
         <param name="randomSeed" value="4711"/>
         <param name="segmentAttribute" value="segment"/>
+        <param name="einkommenSchwelleNiedrigMax" value="3"/>
+        <param name="einkommenSchwelleHochMin" value="8"/>
+        <!-- Einkommensstufe fuer die Kostensensitivitaet (betaCost/-Niedrig/-Hoch,
+             siehe incomeTier-Klassen-Javadoc): hhIncome (1-10, VSP-Population)
+             <= 3 -> NIEDRIG, >= 8 -> HOCH, sonst MITTEL. An der realen
+             hhIncome-Verteilung der Oberlausitz/Dresden-Population orientiert
+             (10pct-Lauf, 112.952 Agenten): Klassen 1-3 zusammen ~10,4% der
+             Agenten, Klassen 8-10 zusammen ~14,5%, Klassen 4-7 (Mehrheit,
+             ~75,1%) als "mittel" - kein amtlicher MiD/SrV-Schwellenwert. -->
         <param name="ascNull" value="-2.955578"/>
         <!-- Nullalternative im DCM (siehe behaviourCandidateTripInserter):
              ascNull per Schritt-9-Bisektion (behaviourCandidateTripInserter.
@@ -240,6 +253,10 @@
             <param name="betaWaitTimeSd" value="0"/>
             <param name="betaCost" value="-0.806"/>
             <param name="betaCostSd" value="0.05"/>
+            <param name="betaCostNiedrig" value="-0.991"/>
+            <param name="betaCostNiedrigSd" value="0.05"/>
+            <param name="betaCostHoch" value="-0.561"/>
+            <param name="betaCostHochSd" value="0.05"/>
             <param name="costPerKm" value="0.2"/>
             <param name="costPerKmWithTicket" value="-1"/>
             <param name="deltaByPreviousMode" value="CA=1.73,AV=0.45,PT=0,PSAV=0,SSAV=0.45"/>
@@ -257,6 +274,10 @@
             <param name="betaWaitTimeSd" value="17.88"/>
             <param name="betaCost" value="-0.806"/>
             <param name="betaCostSd" value="0.05"/>
+            <param name="betaCostNiedrig" value="-0.991"/>
+            <param name="betaCostNiedrigSd" value="0.05"/>
+            <param name="betaCostHoch" value="-0.561"/>
+            <param name="betaCostHochSd" value="0.05"/>
             <param name="costPerKm" value="0.21"/>
             <param name="costPerKmWithTicket" value="-1"/>
             <param name="deltaByPreviousMode" value="CA=0.95,AV=1.73,PT=0,PSAV=0.45,SSAV=0.45"/>
@@ -274,6 +295,10 @@
             <param name="betaWaitTimeSd" value="0"/>
             <param name="betaCost" value="-0.806"/>
             <param name="betaCostSd" value="0.06"/>
+            <param name="betaCostNiedrig" value="-0.991"/>
+            <param name="betaCostNiedrigSd" value="0.06"/>
+            <param name="betaCostHoch" value="-0.561"/>
+            <param name="betaCostHochSd" value="0.06"/>
             <param name="costPerKm" value="0.14"/>
             <param name="costPerKmWithTicket" value="0"/>
             <param name="deltaByPreviousMode" value="CA=0,AV=0,PT=0.85,PSAV=0.45,SSAV=0"/>
@@ -291,6 +316,10 @@
             <param name="betaWaitTimeSd" value="17.88"/>
             <param name="betaCost" value="-0.806"/>
             <param name="betaCostSd" value="0.05"/>
+            <param name="betaCostNiedrig" value="-0.991"/>
+            <param name="betaCostNiedrigSd" value="0.05"/>
+            <param name="betaCostHoch" value="-0.561"/>
+            <param name="betaCostHochSd" value="0.05"/>
             <param name="costPerKm" value="0.38"/>
             <param name="costPerKmWithTicket" value="-1"/>
             <param name="deltaByPreviousMode" value="CA=0.63,AV=0.45,PT=0.95,PSAV=1.73,SSAV=0.95"/>
@@ -308,6 +337,10 @@
             <param name="betaWaitTimeSd" value="17.88"/>
             <param name="betaCost" value="-0.806"/>
             <param name="betaCostSd" value="0.05"/>
+            <param name="betaCostNiedrig" value="-0.991"/>
+            <param name="betaCostNiedrigSd" value="0.05"/>
+            <param name="betaCostHoch" value="-0.561"/>
+            <param name="betaCostHochSd" value="0.05"/>
             <param name="costPerKm" value="0.5"/>
             <param name="costPerKmWithTicket" value="-1"/>
             <param name="deltaByPreviousMode" value="CA=0.95,AV=0.45,PT=0.45,PSAV=0.95,SSAV=1.73"/>
