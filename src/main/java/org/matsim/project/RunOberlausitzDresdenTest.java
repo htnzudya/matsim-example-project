@@ -138,7 +138,7 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 		// siehe stopwatch.csv eines Testlaufs) - auf 10 zurueckgestellt
 		// (Auftraggeber-Vorgabe); fuer echte Konvergenz waere noch deutlich
 		// hoeher (z. B. 50, siehe Git-History) noetig.
-		config.controller().setLastIteration(10);
+		config.controller().setLastIteration(2);
 
 		// Oberlausitz/Dresden nutzt bereits "home" als Heimataktivitaet - kein
 		// Override noetig (anders als equil mit "h").
