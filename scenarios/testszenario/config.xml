@@ -50,6 +50,15 @@
         <param name="kandidatenwegAgentAnteil" value="0.20"/>
         <param name="einkommenSchwelleNiedrigMax" value="3"/>
         <param name="einkommenSchwelleHochMin" value="8"/>
+        <param name="habitDreieckBreiteRechts" value="0.8"/>
+        <!-- Traegheits-/Gewohnheitsbonus (deltaByPreviousMode=0.831 je Diagonaleintrag,
+             siehe dortigen Kommentar) ist ab jetzt nicht mehr deterministisch, sondern
+             dreiecksverteilt: Dreieck(min=0, modus=0.831, max=0.831+0.8=1.631) - links
+             IMMER bis 0 (Auftraggeber-Vorgabe "Dreieck bis 0"), rechts um 0.8 ueber den
+             Modus hinaus (Auftraggeber-Vorgabe "0,8 pro Seite", hier nur noch rechts
+             angewendet, da links durch "bis 0" ersetzt). Keine SD-Daten aus der Studie
+             verfuegbar, daher Dreiecksverteilung statt Normalverteilung wie bei den
+             uebrigen Koeffizienten (siehe modeParams-Klassen-Javadoc). -->
         <!-- Einkommensstufe fuer die Kostensensitivitaet (betaCost/-Niedrig/-Hoch,
              siehe incomeTier-Klassen-Javadoc): hhIncome (1-10, VSP-Population)
              <= 3 -> NIEDRIG, >= 8 -> HOCH, sonst MITTEL. An der realen

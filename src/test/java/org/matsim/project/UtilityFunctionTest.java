@@ -29,6 +29,10 @@ public class UtilityFunctionTest {
         testZeroSdGivesDeterministicResult();
         testIncomeTierThresholds();
         testDrawSelectsIncomeTierBetaCost();
+        testHabitTriangularDistributionDisabledByDefault();
+        testHabitTriangularDistributionRange();
+        testHabitTriangularDistributionMean();
+        testHabitTriangularDistributionLeavesZeroEntriesUntouched();
 
         System.out.println();
         System.out.println("Bestanden: " + passed + " / Fehlgeschlagen: " + failed);
@@ -179,7 +183,80 @@ public class UtilityFunctionTest {
                 near(p.draw(new Random(1)).getBetaCost(), mittel));
     }
 
+    static void testHabitTriangularDistributionDisabledByDefault() {
+        // deltaTriangularHalfWidthRight nicht angegeben (bestehender Konstruktor) -> 0.0 Default.
+        modeParams p = new modeParams(alternatives.AV,
+                -0.5, 0.0, -4.5, 0.0, 0.0, 0.0, -0.2, 0.0, 0.0,
+                Map.of("AV", 0.831), Map.of());
+
+        boolean allIdentical = true;
+        double first = p.draw(new Random(1)).getDelta(alternatives.AV);
+        for (long seed = 2; seed <= 20; seed++) {
+            if (!near(first, p.draw(new Random(seed)).getDelta(alternatives.AV))) {
+                allIdentical = false;
+                break;
+            }
+        }
+        check("Ohne konfigurierte Dreiecksbreite bleibt der Gewohnheitsbonus deterministisch",
+                allIdentical && near(first, 0.831));
+    }
+
+    static void testHabitTriangularDistributionRange() {
+        modeParams p = habitParams(0.831, 0.8);
+
+        boolean allInRange = true;
+        for (long seed = 1; seed <= 200; seed++) {
+            double drawn = p.draw(new Random(seed)).getDelta(alternatives.AV);
+            if (drawn < 0.0 || drawn > 1.631 + 1e-9) {
+                allInRange = false;
+                break;
+            }
+        }
+        check("Dreiecksverteilter Gewohnheitsbonus liegt immer in [0, modus+breite] (hier [0, 1.631])",
+                allInRange);
+    }
+
+    static void testHabitTriangularDistributionMean() {
+        modeParams p = habitParams(0.831, 0.8);
+
+        double sum = 0.0;
+        int n = 20000;
+        for (long seed = 1; seed <= n; seed++) {
+            sum += p.draw(new Random(seed)).getDelta(alternatives.AV);
+        }
+        double mean = sum / n;
+        double expectedMean = (0.0 + 0.831 + 1.631) / 3.0;
+        check("Mittelwert vieler Ziehungen naehert sich dem theoretischen Dreiecksverteilungs-Mittel (min+modus+max)/3 an",
+                Math.abs(mean - expectedMean) < 0.02);
+    }
+
+    static void testHabitTriangularDistributionLeavesZeroEntriesUntouched() {
+        modeParams p = new modeParams(alternatives.AV,
+                -0.5, 0.0, -4.5, 0.0, 0.0, 0.0,
+                -0.2, 0.0, -0.2, 0.0, -0.2, 0.0,
+                0.0, modeParams.NO_TICKET_OVERRIDE,
+                Map.of("AV", 0.831, "CA", 0.0), Map.of(), Map.of(), 0.8);
+
+        boolean caAlwaysZero = true;
+        for (long seed = 1; seed <= 50; seed++) {
+            if (p.draw(new Random(seed)).getDelta(alternatives.CA) != 0.0) {
+                caAlwaysZero = false;
+                break;
+            }
+        }
+        check("Eintraege mit Wert 0.0 (kein Diagonaltreffer) bleiben trotz konfigurierter Dreiecksbreite exakt 0.0",
+                caAlwaysZero);
+    }
+
     // ------------------------------------------------------------ Fixtures
+
+    static modeParams habitParams(double mode, double triangularHalfWidthRight) {
+        return new modeParams(alternatives.AV,
+                -0.5, 0.0, -4.5, 0.0, 0.0, 0.0,
+                -0.2, 0.0, -0.2, 0.0, -0.2, 0.0,
+                0.0, modeParams.NO_TICKET_OVERRIDE,
+                Map.of("AV", mode), Map.of(), Map.of(), triangularHalfWidthRight);
+    }
 
     static agentProfile neutralAgent() {
         return new agentProfile("neutral", Map.of());

@@ -12,7 +12,12 @@ import java.util.Random;
  * (Struktur analog zu Aggregationen mehrerer SLR-Quellen: Mean beta + SD beta).
  * Ist die Streuung 0, verhaelt sich das Modell wie ein Multinomiales Logit;
  * ist sie groesser 0, entsteht ueber agentenindividuelle Ziehungen ein
- * Mixed Logit mit Praeferenzheterogenitaet.
+ * Mixed Logit mit Praeferenzheterogenitaet. Alle Koeffizienten AUSSER dem
+ * Traegheits-/Gewohnheitsbonus (deltaByPreviousMode) werden aus N(mean, sd)
+ * gezogen; der Gewohnheitsbonus hat mangels SD-Daten stattdessen eine
+ * Dreiecksverteilung (siehe deltaTriangularHalfWidthRight-Feld-Javadoc) -
+ * beide Mechanismen degenerieren bei Streuung/Breite 0 sauber zum
+ * deterministischen MNL-Fall.
  *
  * gamma enthaelt die Koeffizienten auf die latenten Konstrukte des Agenten
  * (Schluessel identisch zu denen in {@link agentProfile}), gammaSd die
@@ -98,6 +103,20 @@ public final class modeParams {
      */
     private final Map<String, Double> deltaByPreviousMode;
 
+    /**
+     * Rechte Halbbreite der Dreiecksverteilung fuer den Traegheits-/
+     * Gewohnheitsbonus (Auftraggeber-Vorgabe): draw(Random, incomeTier) zieht
+     * fuer jeden NICHT-null-Eintrag von deltaByPreviousMode aus
+     * Dreieck(min=0, modus=deltaByPreviousMode-Wert, max=Wert+diese
+     * Halbbreite) - links IMMER bis 0 ("Dreieck bis 0", unabhaengig vom
+     * Modus-Wert selbst), rechts um diese konfigurierte Breite ueber den
+     * Modus hinaus (z. B. Modus 0.831 + Breite 0.8 -&gt; Dreieck(0, 0.831,
+     * 1.631)). Default 0.0 = keine Streuung (deterministischer Passthrough
+     * wie zuvor) - Abwaertskompatibilitaet fuer bestehende Aufrufer/Tests,
+     * die dieses Feld nicht kennen.
+     */
+    private final double deltaTriangularHalfWidthRight;
+
     private final Map<String, Double> gamma;
     private final Map<String, Double> gammaSd;
 
@@ -166,6 +185,29 @@ public final class modeParams {
                       Map<String, Double> deltaByPreviousMode,
                       Map<String, Double> gamma,
                       Map<String, Double> gammaSd) {
+        this(mode, asc, ascSd, betaInVehicleTime, betaInVehicleTimeSd,
+                betaWaitTime, betaWaitTimeSd, betaCost, betaCostSd,
+                betaCostNiedrig, betaCostNiedrigSd, betaCostHoch, betaCostHochSd,
+                costPerKm, costPerKmWithTicket,
+                deltaByPreviousMode, gamma, gammaSd, 0.0);
+    }
+
+    /**
+     * Voller Konstruktor inkl. deltaTriangularHalfWidthRight, siehe dortigen
+     * Feld-Javadoc.
+     */
+    public modeParams(alternatives mode,
+                      double asc, double ascSd,
+                      double betaInVehicleTime, double betaInVehicleTimeSd,
+                      double betaWaitTime, double betaWaitTimeSd,
+                      double betaCost, double betaCostSd,
+                      double betaCostNiedrig, double betaCostNiedrigSd,
+                      double betaCostHoch, double betaCostHochSd,
+                      double costPerKm, double costPerKmWithTicket,
+                      Map<String, Double> deltaByPreviousMode,
+                      Map<String, Double> gamma,
+                      Map<String, Double> gammaSd,
+                      double deltaTriangularHalfWidthRight) {
         this.mode = mode;
         this.asc = asc;
         this.ascSd = ascSd;
@@ -182,6 +224,7 @@ public final class modeParams {
         this.costPerKm = costPerKm;
         this.costPerKmWithTicket = costPerKmWithTicket;
         this.deltaByPreviousMode = Collections.unmodifiableMap(new LinkedHashMap<>(deltaByPreviousMode));
+        this.deltaTriangularHalfWidthRight = deltaTriangularHalfWidthRight;
         this.gamma = Collections.unmodifiableMap(new LinkedHashMap<>(gamma));
         this.gammaSd = Collections.unmodifiableMap(new LinkedHashMap<>(gammaSd));
     }
@@ -288,9 +331,15 @@ public final class modeParams {
      * Einkommen differenziert).
      *
      * Bei allen Streuungen = 0 gibt die Methode identische Werte zurueck
-     * (das Modell degeneriert dann sauber zum MNL). deltaByPreviousMode und
-     * costPerKm werden nicht gezogen (costPerKm ist ein Tarif-/LOS-Parameter,
-     * keine Praeferenz; fuer deltaByPreviousMode liegen keine SD-Daten vor).
+     * (das Modell degeneriert dann sauber zum MNL). costPerKm wird nicht
+     * gezogen (Tarif-/LOS-Parameter, keine Praeferenz). deltaByPreviousMode
+     * wird - sofern deltaTriangularHalfWidthRight &gt; 0 konfiguriert ist -
+     * PRO NICHT-NULL-EINTRAG aus einer Dreiecksverteilung gezogen (siehe
+     * deltaTriangularHalfWidthRight-Feld-Javadoc); Eintraege mit Wert 0.0
+     * bleiben unveraendert 0.0 (kein Bonus, keine Streuung noetig - der Bonus
+     * gilt nur beim Diagonaleintrag/identischem Vormodus). Bei
+     * deltaTriangularHalfWidthRight=0.0 (Default) bleibt deltaByPreviousMode
+     * unveraendert (deterministisch, wie vor Einfuehrung der Dreiecksverteilung).
      */
     public modeParams draw(Random random, incomeTier tier) {
         Map<String, Double> drawnGamma = new LinkedHashMap<>();
@@ -299,6 +348,17 @@ public final class modeParams {
             drawnGamma.put(entry.getKey(), entry.getValue() + sd * random.nextGaussian());
         }
         double drawnBetaCost = getBetaCost(tier) + getBetaCostSd(tier) * random.nextGaussian();
+
+        Map<String, Double> drawnDelta = new LinkedHashMap<>();
+        for (Map.Entry<String, Double> entry : deltaByPreviousMode.entrySet()) {
+            double value = entry.getValue();
+            if (value == 0.0 || deltaTriangularHalfWidthRight <= 0.0) {
+                drawnDelta.put(entry.getKey(), value);
+            } else {
+                drawnDelta.put(entry.getKey(), drawTriangular(random, 0.0, value, value + deltaTriangularHalfWidthRight));
+            }
+        }
+
         return new modeParams(
                 mode,
                 asc + ascSd * random.nextGaussian(), 0.0,
@@ -306,10 +366,29 @@ public final class modeParams {
                 betaWaitTime + betaWaitTimeSd * random.nextGaussian(), 0.0,
                 drawnBetaCost, 0.0,
                 costPerKm, costPerKmWithTicket,
-                deltaByPreviousMode,
+                drawnDelta,
                 drawnGamma,
                 Map.of()
         );
+    }
+
+    /**
+     * Dreiecksverteilung(min, modus, max) per Standard-Inverstransformation
+     * (Ziehung u~U(0,1), Fallunterscheidung an der Stelle des Modus). Bei
+     * max&lt;=min (keine Breite konfiguriert) wird der Modus unveraendert
+     * zurueckgegeben - degeneriert sauber zum deterministischen Fall, analog
+     * zu den anderen SD=0-Faellen dieser Klasse.
+     */
+    private static double drawTriangular(Random random, double min, double mode, double max) {
+        if (max <= min) {
+            return mode;
+        }
+        double u = random.nextDouble();
+        double modeFraction = (mode - min) / (max - min);
+        if (u < modeFraction) {
+            return min + Math.sqrt(u * (max - min) * (mode - min));
+        }
+        return max - Math.sqrt((1 - u) * (max - min) * (max - mode));
     }
 
     /**

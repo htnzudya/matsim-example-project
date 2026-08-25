@@ -132,6 +132,20 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     private double einkommenSchwelleHochMin = 8.0;
 
     /**
+     * Rechte Halbbreite der Dreiecksverteilung fuer den Traegheits-/
+     * Gewohnheitsbonus (modeParams.deltaTriangularHalfWidthRight-Feld-Javadoc):
+     * gezogen wird Dreieck(min=0, modus=deltaByPreviousMode-Wert, max=Wert+
+     * diese Breite) - links IMMER bis 0, unabhaengig vom Modus-Wert
+     * (Auftraggeber-Vorgabe "Dreieck bis 0"), rechts um diese Breite ueber
+     * den Modus hinaus. EIN globaler Wert fuer alle Modi (nicht je Modus
+     * konfigurierbar - der Habit-Bonus selbst ist es zwar, seine Streuung
+     * aber nicht, da dafuer keine empirischen SD-/Breite-Daten je Modus
+     * vorliegen). Default 0.0 = keine Streuung (deterministischer
+     * Gewohnheitsbonus, wie vor Einfuehrung dieser Dreiecksverteilung).
+     */
+    private double habitDreieckBreiteRechts = 0.0;
+
+    /**
      * Name des Person-Attributs, das ein bereits vorhandenes Abo/Zeitkarte
      * anzeigt (Oberlausitz/Dresden liefert das als "ptTicket" mit, siehe
      * output_persons.csv eines echten Laufs: Werte "none"/"full", ~14 % der
@@ -353,6 +367,17 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
         this.einkommenSchwelleHochMin = einkommenSchwelleHochMin;
     }
 
+    /** Siehe habitDreieckBreiteRechts-Feld-Javadoc. */
+    @StringGetter("habitDreieckBreiteRechts")
+    public double getHabitDreieckBreiteRechts() {
+        return habitDreieckBreiteRechts;
+    }
+
+    @StringSetter("habitDreieckBreiteRechts")
+    public void setHabitDreieckBreiteRechts(double habitDreieckBreiteRechts) {
+        this.habitDreieckBreiteRechts = habitDreieckBreiteRechts;
+    }
+
     @StringGetter("classifierWeightAge")
     public double getClassifierWeightAge() { return classifierWeightAge; }
 
@@ -428,7 +453,7 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
         Map<alternatives, modeParams> result = new EnumMap<>(alternatives.class);
         for (ConfigGroup cg : getParameterSets(ModeParamSet.SET_NAME)) {
             ModeParamSet s = (ModeParamSet) cg;
-            result.put(s.getAlternative(), s.toModeParams());
+            result.put(s.getAlternative(), s.toModeParams(habitDreieckBreiteRechts));
         }
         return result;
     }
@@ -616,7 +641,7 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
             return alternatives.valueOf(mode);
         }
 
-        public modeParams toModeParams() {
+        public modeParams toModeParams(double deltaTriangularHalfWidthRight) {
             return new modeParams(
                     getAlternative(),
                     asc, ascSd,
@@ -630,7 +655,8 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
                     costPerKm, costPerKmWithTicket,
                     parseMap(deltaByPreviousMode),
                     parseMap(gamma),
-                    parseMap(gammaSd));
+                    parseMap(gammaSd),
+                    deltaTriangularHalfWidthRight);
         }
     }
 
