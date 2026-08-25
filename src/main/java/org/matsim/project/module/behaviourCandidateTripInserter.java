@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
@@ -19,6 +20,7 @@ import java.util.Set;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.matsim.api.core.v01.Coord;
 import org.matsim.api.core.v01.Id;
 import org.matsim.api.core.v01.population.Activity;
 import org.matsim.api.core.v01.population.Leg;
@@ -106,26 +108,36 @@ import com.google.inject.Inject;
  *    hier) - das ist Aufgabe des Nutzers ueber die Config, ablesbar an der
  *    "X/Y Agenten mit Kandidatenweg eingefuegt"-Lognachricht unten.
  *
- *  - Kandidatenweg-Attribute (Zweck, Ziel/Distanz, Startzeit, Dauer) werden
+ *  - NACHBARSCHAFTSAUSWAHL (ersetzt die fruehere segmentbasierte Zufallsziehung):
+ *    Kandidatenweg-Attribute (Zweck, Ziel/Distanz, Startzeit, Dauer) werden
  *    NICHT unabhaengig gezogen, sondern als EIN gemeinsamer, real
- *    existierender Weg eines "vergleichbaren Agenten" (= gleiches Segment,
- *    siehe agentProfile/behaviourConfigGroup.buildSegments) aus der Population
- *    gezogen (collectTemplates(...)) - vermeidet unplausible Attribut-
+ *    existierender Weg eines ANDEREN Agenten der GESAMTEN Population
+ *    uebernommen (collectTemplateProviders(...)/homeLocationGrid/
+ *    selectNearestFittingTemplate(...)) - vermeidet unplausible Attribut-
  *    Kombinationen, die bei unabhaengigen Marginalziehungen entstehen
- *    koennten. Der Zweck wird dabei ZUFAELLIG aus allen tatsaechlich in der
- *    Population vorkommenden Nicht-Heim-Aktivitaeten gezogen, OHNE
- *    Einschraenkung auf diskretionaere Zwecke (Auftraggeber-Vorgabe "einfach
- *    immer random zuweisen" statt einer manuell zu pflegenden Zweck-Taxonomie
- *    je Szenario) - weicht damit von der urspruenglichen Spezifikation ("nur
- *    diskretionaere Zwecke, kein Pflichtweg") bewusst ab, siehe
- *    collectTemplates(...)-Javadoc.
- *    Hat das eigene Segment keine Vorlagen (bzw. hat die Person kein/ein
- *    unbekanntes Segment), wird auf den POPULATIONSWEITEN Vorlagen-Pool
- *    zurueckgegriffen - das deckt insbesondere Agenten OHNE jeden erhobenen
- *    Weg ab (0-Wege-Agenten koennen ohnehin keine eigene Verteilung liefern,
- *    bekommen ueber den Pool-Fallback aber trotzdem einen Kandidatenweg,
- *    siehe Anhang der Auftraggeber-Vorgabe "Agenten mit 0 Wegen sollen
- *    natuerlich auch einen Weg bekommen").
+ *    koennten. "Vergleichbar" bedeutet dabei NICHT mehr gleiches Segment,
+ *    sondern geografische Naehe: gesucht wird - beginnend beim naechsten
+ *    Nachbarn (kuerzeste euklidische Distanz der Heimatkoordinaten,
+ *    unabhaengig vom Segment) und mit wachsendem Suchradius - der erste
+ *    Nachbar, dessen Vorlagen-Weg TATSAECHLICH in die bestehende Wegekette
+ *    der Zielperson passt. Qualifizierend ist dabei nur ein DIREKTER
+ *    Hin-/Rueckweg von/nach Hause (Aktivitaet unmittelbar von einer
+ *    Heimataktivitaet aus erreicht UND unmittelbar von einer Heimataktivitaet
+ *    gefolgt, siehe collectTemplateProviders-Javadoc) - kein Pflichtweg
+ *    (Arbeit/Bildung sind als Vorlagen-Zweck ausgeschlossen) und keine
+ *    laengere Wegekette mit weiteren Zwischenstopps.
+ *    Passt der Weg des naechsten Nachbarn nicht (z. B. Tag der Zielperson
+ *    schon komplett durch Arbeit/Bildung verplant), wird NICHT die ganze
+ *    Person uebersprungen, sondern beim naechstnaeheren Nachbarn
+ *    weitergesucht (Auftraggeber-Feedback "wenn Aktivitaetsplaene schon fuer
+ *    den Tag voll, skippe einfach zu einem naechsten Agenten") - erst wenn
+ *    KEIN Nachbar der gesamten Population einen passenden Weg liefert, gilt
+ *    die Person als strukturell uebersprungen (skipped:noFreeSlot). Der
+ *    Zweck selbst ergibt sich dabei automatisch aus dem gewaehlten
+ *    Nachbar-Weg, ohne eigene Zweck-Taxonomie je Szenario pflegen zu muessen.
+ *    0-Wege-Agenten (kein eigener erhobener Weg) sind davon unberuehrt - die
+ *    Nachbarschaftssuche braucht nur die Heimatkoordinate der Zielperson,
+ *    nicht deren eigene Wegekette.
  *
  *  - Distanz wird NICHT separat gezogen: sie ergibt sich wie beim laufenden
  *    DCM implizit aus dem (Vorlagen-)Zielort nach dem Routing je Modus
@@ -146,7 +158,7 @@ import com.google.inject.Inject;
  *    Zusatzwegs nach hinten (siehe insertCandidateTrip-Javadoc) - dieselbe
  *    ABSOLUT gesetzte end_time-Kette wie im Original, nur um duration
  *    versetzt. Als Vorlagen-Zweck sind "work" und alle "educ_*"-Zwecke
- *    ausgeschlossen (siehe collectTemplates-Javadoc) - ein Zusatzweg soll
+ *    ausgeschlossen (siehe collectTemplateProviders-Javadoc) - ein Zusatzweg soll
  *    keine Pflichttermine wie Arbeit/Schule simulieren.
  *    Nebeneffekt: "Tag endet nicht zuhause" ist damit KEIN Ausschlussgrund
  *    mehr - jede Wegekette hat mindestens eine (die letzte, offene)
@@ -250,6 +262,114 @@ public final class behaviourCandidateTripInserter implements StartupListener {
     }
 
     /**
+     * Ein Agent mit mindestens einem qualifizierenden Kandidatenweg (direkter
+     * Hin-/Rueckweg von/nach Hause, siehe collectTemplateProviders-Javadoc)
+     * sowie dessen Heimatkoordinate - Grundlage der Nachbarschaftssuche
+     * (siehe Klassen-Javadoc "Nachbarschaftsauswahl").
+     */
+    private record templateProvider(Id<Person> personId, Coord homeCoord, List<candidateTripTemplate> templates) {
+    }
+
+    /** Ergebnis der Nachbarschaftssuche: Nachbar + dessen passende Vorlage + der bereits validierte Einfuegepunkt. */
+    private record templateSelection(templateProvider provider, candidateTripTemplate template, insertionPoint boundary) {
+    }
+
+    /**
+     * Einfacher Gitter-Index ueber die Heimatkoordinaten aller templateProvider,
+     * fuer eine entfernungsaufsteigende Nachbarschaftssuche (Ring-Expansion um
+     * die Gitterzelle der Zielkoordinate) ohne O(n)-Sortierung je Zielperson -
+     * noetig, weil die Suche fuer JEDE Person der Population laufen kann
+     * (siehe notifyStartup/calibrateAscNull); ein voller Sortierlauf je Person
+     * waere bei grossen Populationen (z. B. hoehere Prozentsaetze auf einem
+     * Server mit mehr RAM) nicht mehr praktikabel (O(n^2 log n)).
+     *
+     * Zellgroesse so gewaehlt, dass im Mittel ein Provider je Zelle liegt
+     * (sqrt(Flaeche/Anzahl)) - bei ungefaehr gleichverteilten Heimatkoordinaten
+     * (Siedlungsflaeche) findet die Ringsuche die naechsten Nachbarn i. d. R.
+     * schon im ersten oder zweiten Ring. expandingRing(...) liefert genau die
+     * Provider einer einzelnen Ringschale (Tschebyschow-Distanz == ring, kein
+     * Ueberlapp zwischen Ringen) - die Sicherheitsbedingung "kleinste bisher
+     * gefundene Distanz &lt;= ring*cellSize" im Aufrufer
+     * (selectNearestFittingTemplate) stellt sicher, dass kein naeherer
+     * Provider in einem noch nicht durchsuchten, weiter entfernten Ring
+     * uebersehen wird (Standardargument der Gitter-Ringsuche).
+     */
+    private static final class homeLocationGrid {
+        private final double cellSize;
+        private final int minCellX, minCellY, maxCellX, maxCellY;
+        private final Map<Long, List<templateProvider>> cells = new LinkedHashMap<>();
+
+        homeLocationGrid(List<templateProvider> providers) {
+            double minX = Double.MAX_VALUE, maxX = -Double.MAX_VALUE;
+            double minY = Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
+            for (templateProvider provider : providers) {
+                minX = Math.min(minX, provider.homeCoord().getX());
+                maxX = Math.max(maxX, provider.homeCoord().getX());
+                minY = Math.min(minY, provider.homeCoord().getY());
+                maxY = Math.max(maxY, provider.homeCoord().getY());
+            }
+            double area = Math.max(1.0, (maxX - minX) * (maxY - minY));
+            this.cellSize = Math.max(1.0, Math.sqrt(area / Math.max(1, providers.size())));
+
+            int loX = Integer.MAX_VALUE, loY = Integer.MAX_VALUE, hiX = Integer.MIN_VALUE, hiY = Integer.MIN_VALUE;
+            for (templateProvider provider : providers) {
+                int cx = cellCoord(provider.homeCoord().getX());
+                int cy = cellCoord(provider.homeCoord().getY());
+                cells.computeIfAbsent(cellKey(cx, cy), k -> new ArrayList<>()).add(provider);
+                loX = Math.min(loX, cx);
+                loY = Math.min(loY, cy);
+                hiX = Math.max(hiX, cx);
+                hiY = Math.max(hiY, cy);
+            }
+            this.minCellX = providers.isEmpty() ? 0 : loX;
+            this.minCellY = providers.isEmpty() ? 0 : loY;
+            this.maxCellX = providers.isEmpty() ? 0 : hiX;
+            this.maxCellY = providers.isEmpty() ? 0 : hiY;
+        }
+
+        private int cellCoord(double ordinate) {
+            return (int) Math.floor(ordinate / cellSize);
+        }
+
+        private static long cellKey(int cx, int cy) {
+            return (((long) cx) << 32) ^ (cy & 0xffffffffL);
+        }
+
+        double cellSize() {
+            return cellSize;
+        }
+
+        /** Groesster Ring, ab dem die gesamte Population sicher durchsucht ist (Suchabbruch-Garantie). */
+        int maxRing(Coord query) {
+            int qx = cellCoord(query.getX());
+            int qy = cellCoord(query.getY());
+            int reach = Math.max(
+                    Math.max(Math.abs(qx - minCellX), Math.abs(qx - maxCellX)),
+                    Math.max(Math.abs(qy - minCellY), Math.abs(qy - maxCellY)));
+            return Math.max(1, reach + 1);
+        }
+
+        /** Alle Provider, deren Gitterzelle genau im Tschebyschow-Abstand 'ring' um query liegt. */
+        List<templateProvider> expandingRing(Coord query, int ring) {
+            int qx = cellCoord(query.getX());
+            int qy = cellCoord(query.getY());
+            List<templateProvider> result = new ArrayList<>();
+            for (int dx = -ring; dx <= ring; dx++) {
+                for (int dy = -ring; dy <= ring; dy++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dy)) != ring) {
+                        continue;
+                    }
+                    List<templateProvider> bucket = cells.get(cellKey(qx + dx, qy + dy));
+                    if (bucket != null) {
+                        result.addAll(bucket);
+                    }
+                }
+            }
+            return result;
+        }
+    }
+
+    /**
      * Bugfix: ein reiner homeType.equals(activity.getType())-Vergleich matcht bei
      * Oberlausitz/Dresden NIE (Aktivitaetstypen folgen der VSP-Konvention
      * "zweck_dauerInSekunden", z. B. "home_82200", niemals das nackte "home") -
@@ -318,6 +438,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
         double ascNull = cfg.getAscNull();
         long randomSeed = cfg.getRandomSeed();
         String segmentAttribute = cfg.getSegmentAttribute();
+        double agentAnteil = cfg.getKandidatenwegAgentAnteil();
         Set<alternatives> worldChoiceSet = buildWorldChoiceSet(cfg.getKandidatenwegWelt());
         List<kandidatenwegRow> csvRows = new ArrayList<>();
         List<logsumRow> logsumRows = new ArrayList<>();
@@ -325,15 +446,14 @@ public final class behaviourCandidateTripInserter implements StartupListener {
         Map<alternatives, modeParams> modeParamsByAlternative = cfg.buildModeParams();
         Map<String, agentProfile> segmentsById = cfg.buildSegments();
 
-        Map<String, List<candidateTripTemplate>> templatesBySegment = collectTemplates(homeType, segmentAttribute);
-        List<candidateTripTemplate> allTemplates = templatesBySegment.values().stream()
-                .flatMap(List::stream).toList();
+        List<templateProvider> allProviders = collectTemplateProviders(homeType);
+        homeLocationGrid grid = new homeLocationGrid(allProviders);
 
-        log.info("Nullalternative: " + allTemplates.size() + " Kandidatenweg-Vorlagen aus "
-                + templatesBySegment.size() + " Segmenten gesammelt (zufaellig aus allen "
-                + "Nicht-Heim-Aktivitaeten der Population, keine Zweck-Einschraenkung).");
+        log.info("Nullalternative: " + allProviders.size() + " Agenten mit mindestens einem qualifizierenden "
+                + "Kandidatenweg (direkter Hin-/Rueckweg von/nach Hause, ohne Arbeit/Bildung) als Vorlagen-Pool "
+                + "fuer die Nachbarschaftssuche gesammelt.");
 
-        int total = 0, inserted = 0, skippedNoTemplate = 0, skippedNoFreeSlot = 0,
+        int total = 0, inserted = 0, skippedNotSampled = 0, skippedNoTemplate = 0, skippedNoFreeSlot = 0,
                 skippedNoModeAvailable = 0, skippedNullChosen = 0;
 
         for (Person person : population.getPersons().values()) {
@@ -343,57 +463,50 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             Object segmentValue = person.getAttributes().getAttribute(segmentAttribute);
             String segment = segmentValue == null ? "unbekannt" : segmentValue.toString();
 
+            if (!isCandidateEligible(person, randomSeed, agentAnteil)) {
+                skippedNotSampled++;
+                person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:notSampled");
+                csvRows.add(new kandidatenwegRow(personId, segment, null, null, null, null, "NULLALTERNATIVE", null));
+                continue;
+            }
+
             Plan plan = person.getSelectedPlan();
             List<PlanElement> elements = plan.getPlanElements();
 
-            List<candidateTripTemplate> pool = resolveTemplatePool(person, segmentAttribute, templatesBySegment, allTemplates);
-            if (pool.isEmpty()) {
+            Coord homeCoord = allProviders.isEmpty() ? null : resolveHomeCoord(person, homeType);
+            if (homeCoord == null) {
                 skippedNoTemplate++;
                 person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noTemplate");
                 csvRows.add(new kandidatenwegRow(personId, segment, null, null, null, null, "NULLALTERNATIVE", null));
                 continue;
             }
 
-            long templateSeed = tripContextBuilder.personSeed(randomSeed, person.getId(), "candidateTemplate");
-            candidateTripTemplate template = pool.get(new Random(templateSeed).nextInt(pool.size()));
-            String zweck = behaviourModule.parseActivityType(template.sourceActivity().getType()).purpose();
-
-            double duration = template.durationSeconds();
-            if (duration >= END_OF_DAY_SECONDS) {
-                skippedNoTemplate++;
-                person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noTemplate");
-                csvRows.add(new kandidatenwegRow(personId, segment, null, zweck, null, null, "NULLALTERNATIVE", null));
-                continue;
-            }
-
-            insertionPoint boundary = findInsertionBoundary(elements, template.startTimeSeconds());
-            if (boundary == null) {
-                // Restlicher Tag komplett durch Arbeit/Bildung blockiert - inkl. Sonderfall
-                // "letzte, offene Aktivitaet ist selbst Arbeit/Bildung" (siehe
-                // findInsertionBoundary-Javadoc). Kein freier Zeitpunkt fuer einen Zusatzweg.
+            Optional<templateSelection> selection = selectNearestFittingTemplate(person.getId(), homeCoord, elements, grid);
+            if (selection.isEmpty()) {
+                // Kein Nachbar der gesamten Population liefert einen Vorlagen-Weg, der in die
+                // bestehende Wegekette dieser Person passt (Tag komplett durch Arbeit/Bildung
+                // verplant, oder alle Vorlagen-Dauern sprengen das Tagesende) - siehe
+                // selectNearestFittingTemplate-Javadoc.
                 skippedNoFreeSlot++;
                 person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noFreeSlot");
-                csvRows.add(new kandidatenwegRow(personId, segment, null, zweck, null, null, "NULLALTERNATIVE", null));
+                csvRows.add(new kandidatenwegRow(personId, segment, null, null, null, null, "NULLALTERNATIVE", null));
                 continue;
             }
+
+            candidateTripTemplate template = selection.get().template();
+            insertionPoint boundary = selection.get().boundary();
+            String zweck = behaviourModule.parseActivityType(template.sourceActivity().getType()).purpose();
+            double duration = template.durationSeconds();
             Activity boundaryActivity = boundary.activity();
             double candidateStart = boundary.candidateStart();
 
             // Luftliniendistanz Einfuegepunkt->Kandidatenziel (Schritt 8, Spalte "distanz") -
-            // hier statt erst nach dem Tagesende-Check berechnen: braucht nur boundaryActivity
-            // (bereits bekannt) und template.sourceActivity() (dieselbe Koordinate wie die
-            // spaeter tatsaechlich verwendete destinationActivity, siehe copyLocationAs unten -
-            // nur der Aktivitaetstyp aendert sich, nicht der Ort).
+            // braucht nur boundaryActivity (bereits bekannt) und template.sourceActivity()
+            // (dieselbe Koordinate wie die spaeter tatsaechlich verwendete destinationActivity,
+            // siehe copyLocationAs unten - nur der Aktivitaetstyp aendert sich, nicht der Ort).
             double distanzMeter = CoordUtils.calcEuclideanDistance(
                     FacilitiesUtils.toFacility(boundaryActivity, facilities).getCoord(),
                     FacilitiesUtils.toFacility(template.sourceActivity(), facilities).getCoord());
-
-            if (candidateStart + duration >= END_OF_DAY_SECONDS) {
-                skippedNoTemplate++;
-                person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noTemplate");
-                csvRows.add(new kandidatenwegRow(personId, segment, distanzMeter, zweck, null, null, "NULLALTERNATIVE", null));
-                continue;
-            }
 
             agentProfile profile = resolveProfile(person, segmentAttribute, segmentsById)
                     .draw(new Random(tripContextBuilder.personSeed(randomSeed, person.getId(), "profile")));
@@ -495,9 +608,10 @@ public final class behaviourCandidateTripInserter implements StartupListener {
 
         log.info(String.format(
                 "Nullalternative: %d/%d Agenten mit Kandidatenweg eingefuegt "
-                        + "(Nullalternative gewaehlt: %d, kein freier Zeitpunkt (Arbeit/Bildung): %d, "
-                        + "keine Vorlage: %d, kein Modus verfuegbar/routbar: %d).",
-                inserted, total, skippedNullChosen, skippedNoFreeSlot, skippedNoTemplate, skippedNoModeAvailable));
+                        + "(nicht in der Stichprobe (kandidatenwegAgentAnteil=%.4f): %d, Nullalternative gewaehlt: %d, "
+                        + "kein freier Zeitpunkt (Arbeit/Bildung): %d, keine Vorlage: %d, kein Modus verfuegbar/routbar: %d).",
+                inserted, total, agentAnteil, skippedNotSampled, skippedNullChosen, skippedNoFreeSlot, skippedNoTemplate,
+                skippedNoModeAvailable));
 
         writeKandidatenwegeCsv(csvRows);
         writeLogsumCsv(logsumRows);
@@ -640,71 +754,152 @@ public final class behaviourCandidateTripInserter implements StartupListener {
      * siehe Spezifikation "darf dort nicht neu kalibriert werden - das waere
      * zirkulaer"), Ziel = cfg.ascNullKalibrierungZielanteil.
      *
+     * NEUER ANSATZ (Auftraggeber-Vorgabe, ersetzt die Version die NUR
+     * Kandidatenwege zaehlte): die Nullalternative-Entscheidung wird jetzt
+     * NICHT mehr nur auf den neuen Kandidatenweg angewendet, sondern
+     * ZUSAETZLICH auf JEDEN bereits bestehenden (erhobenen) Weg JEDER Person
+     * der Population - fuer die Kalibrierung, NICHT fuer den echten Lauf
+     * (siehe notifyStartup: dort bleiben bestehende Plaene unveraendert,
+     * nur der Kandidatenweg wird ueberhaupt eingefuegt/verworfen).
+     * Grundgesamtheit der Bisektion ist also: ALLE bestehenden Wege ALLER
+     * Personen PLUS die Kandidatenwege NUR der ueber
+     * kandidatenwegAgentAnteil gezogenen Teilmenge (z. B. 20% der Agenten) -
+     * NICHT mehr die reine Personenzahl. targetShare (WEG-Anteil, wie
+     * bisher definiert) muss dafuer entsprechend gesetzt werden, z. B. fuer
+     * "17% aller Wege (bestehende + Kandidaten) werden nicht genommen" ->
+     * targetShare = 1 - 0.17 = 0.83.
+     * Herleitung/Rechtfertigung: bei kandidatenwegAgentAnteil=1.0 (Default)
+     * entspricht das exakt der vorherigen Definition (ein bestehender Weg
+     * wird hier NICHT extra gezaehlt, da bestehende Wege nur bei
+     * agentAnteil&lt;1.0 ueberhaupt eine neue Bedeutung fuer die Zielgroesse
+     * gewinnen - Bugfix-Hinweis: bei agentAnteil=1.0 werden bestehende Wege
+     * TROTZDEM mitgezaehlt, das Ziel muss dann entsprechend angepasst
+     * werden, siehe Konfigurationskommentar in scenarios/testszenario/
+     * config.xml).
+     *
      * WICHTIGE ABWEICHUNG von der Spezifikation ("ein Durchlauf ... dauert
      * Sekunden, 40 Durchlaeufe sind unkritisch"): das gilt fuer die in der
      * Spezifikation vorgesehene Analytik-LOS ohne Routing (Schritt 4). Dieses
      * Add-on routet dagegen echt (siehe Klassen-Javadoc) - ein 10pct-Lauf
      * braucht dafuer mehrere Minuten (siehe Git-Historie), 40x davon waere
      * unpraktikabel. Deshalb hier explizit in zwei Phasen getrennt: Phase 1
-     * (teuer, EINMAL) berechnet je Person die gerouteten CA/PT-Nutzenwerte
-     * UND die deterministische Ziehung nullAlternativeDraw - beide sind
-     * unabhaengig von ascNull, das nur die Nullalternative selbst betrifft.
-     * Phase 2 (billig, 40x) wiederholt nur noch Softmax+Ziehung ueber die in
-     * Phase 1 bereits berechneten Werte - reine Arithmetik, kein Routing mehr.
-     * Damit bleibt die Bisektion trotz echtem Routing praktikabel (eine
-     * Routing-Phase statt vierzig).
+     * (teuer, EINMAL) berechnet je Weg (bestehend ODER Kandidat) die
+     * gerouteten CA/PT-Nutzenwerte UND die deterministische Ziehung
+     * nullAlternativeDraw - beide sind unabhaengig von ascNull, das nur die
+     * Nullalternative selbst betrifft. Phase 2 (billig, 40x) wiederholt nur
+     * noch Softmax+Ziehung ueber die in Phase 1 bereits berechneten Werte -
+     * reine Arithmetik, kein Routing mehr. Damit bleibt die Bisektion trotz
+     * echtem Routing praktikabel (eine Routing-Phase statt vierzig) - auch
+     * wenn Phase 1 durch die bestehenden Wege ALLER Personen jetzt deutlich
+     * mehr Routing-Aufwand hat als vorher (vorher: ein Kandidat je Person;
+     * jetzt: alle bestehenden Wege je Person plus ein Kandidat je Person der
+     * Stichprobe).
      *
-     * Strukturell ausgeschlossene Personen (keine Vorlage/kein freier
-     * Zeitpunkt) zaehlen in den Nenner des Ziel-Anteils, tragen aber nie zum
-     * WEG-Zaehler bei - unabhaengig von ascNull, siehe kandidatenwegRow-
-     * Javadoc fuer dieselbe Logik in der normalen CSV.
+     * Strukturell ausgeschlossene Wege (kein Modus verfuegbar/routbar, oder -
+     * fuer Kandidaten - keine Vorlage/kein freier Zeitpunkt) zaehlen in den
+     * Nenner des Ziel-Anteils, tragen aber nie zum WEG-Zaehler bei -
+     * unabhaengig von ascNull, siehe kandidatenwegRow-Javadoc fuer dieselbe
+     * Logik in der normalen CSV.
      */
     private void calibrateAscNull() {
         String homeType = cfg.getHomeActivityType();
         long randomSeed = cfg.getRandomSeed();
         String segmentAttribute = cfg.getSegmentAttribute();
         double targetShare = cfg.getAscNullKalibrierungZielanteil();
+        double agentAnteil = cfg.getKandidatenwegAgentAnteil();
         Set<alternatives> baseChoiceSet = EnumSet.of(alternatives.CA, alternatives.PT);
 
         Map<alternatives, modeParams> modeParamsByAlternative = cfg.buildModeParams();
         Map<String, agentProfile> segmentsById = cfg.buildSegments();
-        Map<String, List<candidateTripTemplate>> templatesBySegment = collectTemplates(homeType, segmentAttribute);
-        List<candidateTripTemplate> allTemplates = templatesBySegment.values().stream().flatMap(List::stream).toList();
+        List<templateProvider> allProviders = collectTemplateProviders(homeType);
+        homeLocationGrid grid = new homeLocationGrid(allProviders);
 
         int totalPopulation = population.getPersons().size();
-        log.info("ascNull-Kalibrierung: Phase 1 (Routing CA/PT, Basiswelt, einmalig) fuer "
-                + totalPopulation + " Personen, Ziel-WEG-Anteil " + targetShare + "...");
+        log.info(String.format(Locale.ROOT,
+                "ascNull-Kalibrierung: Phase 1 (Routing CA/PT, Basiswelt, einmalig) fuer alle bestehenden "
+                        + "Wege von %d Personen PLUS Kandidatenwege einer %.4f-Stichprobe, Ziel-WEG-Anteil %.4f...",
+                totalPopulation, agentAnteil, targetShare));
 
         List<calibrationPersonContext> contexts = new ArrayList<>();
         for (Person person : population.getPersons().values()) {
-            List<candidateTripTemplate> pool = resolveTemplatePool(person, segmentAttribute, templatesBySegment, allTemplates);
-            if (pool.isEmpty()) {
+            agentProfile profile = resolveProfile(person, segmentAttribute, segmentsById)
+                    .draw(new Random(tripContextBuilder.personSeed(randomSeed, person.getId(), "profile")));
+            Collection<String> availableModes = modeAvailability.getAvailableModes(person, List.of());
+
+            // NEU: jeder bestehende (bereits erhobene) Weg dieser Person - siehe Methoden-Javadoc
+            // "Neuer Ansatz". TripStructureUtils.getTrips liefert echte Wegeendpunkte (ueberspringt
+            // ggf. vorhandene Stage-/Interaktionsaktivitaeten automatisch), unabhaengig vom
+            // tatsaechlich gewaehlten Modus wird hier ausschliesslich CA/PT bewertet (Basiswelt).
+            List<TripStructureUtils.Trip> existingTrips = TripStructureUtils.getTrips(person.getSelectedPlan());
+            for (int tripIndex = 0; tripIndex < existingTrips.size(); tripIndex++) {
+                TripStructureUtils.Trip trip = existingTrips.get(tripIndex);
+                Activity originActivity = trip.getOriginActivity();
+                Activity destinationActivity = trip.getDestinationActivity();
+                if (originActivity.getEndTime().isUndefined()) {
+                    continue; // kein verlaesslicher Abfahrtszeitpunkt - siehe collectTemplateProviders-Javadoc
+                }
+                double departureTime = originActivity.getEndTime().seconds();
+                Facility originFacility = FacilitiesUtils.toFacility(originActivity, facilities);
+                Facility destinationFacility = FacilitiesUtils.toFacility(destinationActivity, facilities);
+
+                Map<alternatives, Double> existingTripUtilities = new LinkedHashMap<>();
+                for (alternatives alternative : modeParamsByAlternative.keySet()) {
+                    if (!baseChoiceSet.contains(alternative) || !availableModes.contains(alternative.getMatsimMode())) {
+                        continue;
+                    }
+                    if (alternative == alternatives.CA) {
+                        ensureVehicleId(person, alternative.getMatsimMode());
+                    }
+                    modeParams meanParams = modeParamsByAlternative.get(alternative);
+                    modeParams params = meanParams.draw(
+                            new Random(tripContextBuilder.personSeed(randomSeed, person.getId(),
+                                    "baseline" + tripIndex + alternative.name())),
+                            cfg.resolveIncomeTier(person));
+                    List<? extends PlanElement> routed;
+                    try {
+                        routed = tripRouter.calcRoute(alternative.getMatsimMode(), originFacility, destinationFacility,
+                                departureTime, person, new AttributesImpl());
+                    } catch (RuntimeException e) {
+                        continue;
+                    }
+                    double costPerKm = params.effectiveCostPerKm(cfg.hasTicket(person));
+                    TripContext tripContext = tripContextBuilder.buildTripContext(
+                            timeInterpretation, departureTime, routed, costPerKm);
+                    existingTripUtilities.put(alternative, utilityFunction.utility(profile, params, tripContext, null));
+                }
+
+                double existingTripDraw = new Random(tripContextBuilder.personSeed(randomSeed, person.getId(),
+                        "baselineNullDraw" + tripIndex)).nextDouble();
+                contexts.add(new calibrationPersonContext(existingTripUtilities, existingTripDraw));
+            }
+
+            // Kandidatenweg wie bisher, aber nur fuer die ueber kandidatenwegAgentAnteil gezogene
+            // Stichprobe (siehe isCandidateEligible-Javadoc) - bei agentAnteil=1.0 (Default) wie
+            // gehabt fuer alle Personen.
+            if (!isCandidateEligible(person, randomSeed, agentAnteil)) {
+                continue;
+            }
+            if (allProviders.isEmpty()) {
                 continue; // strukturell ausgeschlossen - siehe Methoden-Javadoc
             }
-            long templateSeed = tripContextBuilder.personSeed(randomSeed, person.getId(), "candidateTemplate");
-            candidateTripTemplate template = pool.get(new Random(templateSeed).nextInt(pool.size()));
-            double duration = template.durationSeconds();
-            if (duration >= END_OF_DAY_SECONDS) {
+            Coord homeCoord = resolveHomeCoord(person, homeType);
+            if (homeCoord == null) {
                 continue;
             }
             List<PlanElement> elements = person.getSelectedPlan().getPlanElements();
-            insertionPoint boundary = findInsertionBoundary(elements, template.startTimeSeconds());
-            if (boundary == null) {
-                continue;
+            Optional<templateSelection> selection = selectNearestFittingTemplate(person.getId(), homeCoord, elements, grid);
+            if (selection.isEmpty()) {
+                continue; // strukturell ausgeschlossen - siehe Methoden-Javadoc/selectNearestFittingTemplate-Javadoc
             }
+            candidateTripTemplate template = selection.get().template();
+            insertionPoint boundary = selection.get().boundary();
             Activity boundaryActivity = boundary.activity();
             double candidateStart = boundary.candidateStart();
-            if (candidateStart + duration >= END_OF_DAY_SECONDS) {
-                continue;
-            }
 
-            agentProfile profile = resolveProfile(person, segmentAttribute, segmentsById)
-                    .draw(new Random(tripContextBuilder.personSeed(randomSeed, person.getId(), "profile")));
             Facility originFacility = FacilitiesUtils.toFacility(boundaryActivity, facilities);
             Activity destinationActivity = copyLocationAs(template.sourceActivity(), template.sourceActivity().getType());
             Facility destinationFacility = FacilitiesUtils.toFacility(destinationActivity, facilities);
 
-            Collection<String> availableModes = modeAvailability.getAvailableModes(person, List.of());
             Map<alternatives, Double> realUtilities = new LinkedHashMap<>();
             for (alternatives alternative : modeParamsByAlternative.keySet()) {
                 if (!baseChoiceSet.contains(alternative) || !availableModes.contains(alternative.getMatsimMode())) {
@@ -734,8 +929,10 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             contexts.add(new calibrationPersonContext(realUtilities, draw));
         }
 
-        log.info("ascNull-Kalibrierung: Phase 1 fertig (" + contexts.size() + "/" + totalPopulation
-                + " Personen teilnahmefaehig), Phase 2 (Bisektion, 40 Iterationen, kein weiteres Routing)...");
+        int totalWege = contexts.size();
+        log.info("ascNull-Kalibrierung: Phase 1 fertig (" + totalWege + " Wege insgesamt - bestehende Wege "
+                + "aller Personen plus Kandidatenwege der Stichprobe), Phase 2 (Bisektion, 40 Iterationen, "
+                + "kein weiteres Routing)...");
 
         double scaleParameter = cfg.getScaleParameter();
         double lo = -10.0, hi = 10.0, mid = 0.0;
@@ -757,7 +954,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                     wegCountAtMid++;
                 }
             }
-            double share = (double) wegCountAtMid / totalPopulation;
+            double share = (double) wegCountAtMid / totalWege;
             // P(0) steigt monoton mit ascNull -> WEG-Anteil faellt monoton mit ascNull (siehe
             // Methoden-Javadoc): Anteil zu hoch -> ascNull erhoehen -> obere Haelfte weitersuchen.
             if (share > targetShare) {
@@ -767,12 +964,12 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             }
         }
 
-        double finalShare = (double) wegCountAtMid / totalPopulation;
+        double finalShare = (double) wegCountAtMid / totalWege;
         log.info(String.format(Locale.ROOT,
                 "ascNull-Kalibrierung fertig: ascNull=%.6f (WEG-Anteil %.4f, Ziel %.4f, Basiswelt CA/PT, "
-                        + "%d/%d Personen, 40 Bisektionsschritte).",
-                mid, finalShare, targetShare, wegCountAtMid, totalPopulation));
-        writeCalibrationResult(mid, targetShare, finalShare, wegCountAtMid, totalPopulation);
+                        + "%d/%d Wege, 40 Bisektionsschritte).",
+                mid, finalShare, targetShare, wegCountAtMid, totalWege));
+        writeCalibrationResult(mid, targetShare, finalShare, wegCountAtMid, totalWege);
 
         // Kein Aufruf hier hat einen Sinn fuer einen reinen Kalibrierungslauf - die eigentlichen
         // MATSim-Iterationen (config.controller().lastIteration) wuerden nur die UNVERAENDERTEN
@@ -784,14 +981,14 @@ public final class behaviourCandidateTripInserter implements StartupListener {
     }
 
     private void writeCalibrationResult(double ascNull, double targetShare, double achievedShare,
-            long wegCount, int totalPopulation) {
+            long wegCount, int totalWege) {
         try {
             Path directory = Path.of(config.controller().getOutputDirectory());
             Files.createDirectories(directory);
             Path csvPath = directory.resolve("ascnull_kalibrierung.csv");
-            String csv = "ascNull;zielAnteil;erreichterAnteil;wegCount;totalPopulation\n"
+            String csv = "ascNull;zielAnteil;erreichterAnteil;wegCount;totalWege\n"
                     + String.format(Locale.ROOT, "%.6f;%.6f;%.6f;%d;%d\n",
-                            ascNull, targetShare, achievedShare, wegCount, totalPopulation);
+                            ascNull, targetShare, achievedShare, wegCount, totalWege);
             Files.writeString(csvPath, csv, StandardCharsets.UTF_8);
             log.info("ascNull-Kalibrierung: Ergebnis nach " + csvPath + " geschrieben.");
         } catch (IOException e) {
@@ -814,7 +1011,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
 
     /**
      * Arbeit/Bildung duerfen weder als Vorlagen-Zweck gezogen (siehe
-     * collectTemplates) noch als laufende Aktivitaet fuer einen Zusatzweg
+     * collectTemplateProviders) noch als laufende Aktivitaet fuer einen Zusatzweg
      * unterbrochen werden (siehe findInsertionBoundary) - unrealistisch, waehrend
      * eines Pflichttermins spontan einen Zusatzweg zu unternehmen. Jede andere
      * Aktivitaet (Freizeit, zuhause, Einkauf, Besuch, ...) darf dagegen
@@ -946,62 +1143,181 @@ public final class behaviourCandidateTripInserter implements StartupListener {
         return profile != null ? profile : new agentProfile("__neutral__", Map.of());
     }
 
-    private static List<candidateTripTemplate> resolveTemplatePool(Person person, String segmentAttribute,
-            Map<String, List<candidateTripTemplate>> templatesBySegment, List<candidateTripTemplate> allTemplates) {
-        Object value = person.getAttributes().getAttribute(segmentAttribute);
-        List<candidateTripTemplate> segmentPool = value == null ? null : templatesBySegment.get(value.toString());
-        return (segmentPool == null || segmentPool.isEmpty()) ? allTemplates : segmentPool;
+    /**
+     * Deterministische Ziehung, ob diese Person ueberhaupt einen Kandidatenweg
+     * angeboten bekommt (verhaltensmodell.kandidatenwegAgentAnteil, siehe
+     * behaviourConfigGroup-Feld-Javadoc) - Default 1.0 (alle Agenten,
+     * bisheriges Verhalten). Bei Werten &lt; 1.0 wird NUR fuer die gezogenen
+     * Agenten ueberhaupt eine Nachbarschaftssuche versucht; alle anderen
+     * bleiben unveraendert wie erhoben, exakt wie bei einer strukturell
+     * uebersprungenen Person, nur mit eigener Outcome-Kategorie
+     * ("skipped:notSampled") zur Unterscheidung.
+     */
+    private static boolean isCandidateEligible(Person person, long randomSeed, double agentAnteil) {
+        if (agentAnteil >= 1.0) {
+            return true;
+        }
+        double draw = new Random(tripContextBuilder.personSeed(randomSeed, person.getId(), "candidateEligibility")).nextDouble();
+        return draw < agentAnteil;
     }
 
     /**
-     * Sammelt aus der GESAMTEN Population alle Nicht-Heim-Aktivitaeten mit
-     * bekannter Ankunftszeit (vorangehender Leg mit definierter Abfahrtszeit -
-     * die erste Aktivitaet eines Plans hat keine, liefert also keine Vorlage),
-     * gruppiert nach dem Segment DES BEITRAGENDEN AGENTEN. "Vergleichbare
-     * Agenten" = gleiches Segment, siehe Klassen-Javadoc.
-     *
-     * Zweck-Einschraenkung: Arbeit und alle Bildungszwecke (educ_*) sind
-     * ausgeschlossen (isBlockingPurpose) - ein spontaner Zusatzweg soll keinen
-     * Pflichttermin wie Arbeit/Schule simulieren. Sonst wird der Zweck
-     * zufaellig aus allen tatsaechlich vorkommenden Nicht-Heim-Aktivitaeten
-     * gezogen (Auftraggeber-Vorgabe "einfach immer random zuweisen" statt
-     * einer manuell zu pflegenden Zweck-Taxonomie je Szenario).
+     * Heimatkoordinate einer Person - Grundlage der Nachbarschaftssuche (siehe
+     * homeLocationGrid/selectNearestFittingTemplate-Javadoc). Nimmt die erste
+     * im Plan gefundene Heimataktivitaet (bei mehreren Heimataktivitaeten im
+     * Tagesplan - unueblich, aber strukturell moeglich - ist das ausreichend,
+     * da sie in aller Regel denselben Ort referenzieren). Liefert null, wenn
+     * die Person KEINE Heimataktivitaet hat (strukturell durch
+     * registerHomeActivityTypes/registerHomeActivityTypes abgedeckt, hier nur
+     * defensiv).
      */
-    private Map<String, List<candidateTripTemplate>> collectTemplates(String homeType, String segmentAttribute) {
-        Map<String, List<candidateTripTemplate>> result = new LinkedHashMap<>();
+    private Coord resolveHomeCoord(Person person, String homeType) {
+        for (PlanElement element : person.getSelectedPlan().getPlanElements()) {
+            if (element instanceof Activity activity && isHomeActivity(activity.getType(), homeType)) {
+                return FacilitiesUtils.toFacility(activity, facilities).getCoord();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Sammelt aus der GESAMTEN Population alle qualifizierenden Kandidatenweg-
+     * Vorlagen, gruppiert nach dem beitragenden Agenten (templateProvider) -
+     * Grundlage der Nachbarschaftssuche (siehe Klassen-Javadoc
+     * "Nachbarschaftsauswahl"). ANDERS als die fruehere segmentbasierte
+     * Vorlagen-Sammlung wird HIER NICHT mehr nach Segment gruppiert - die
+     * geografische Naehe der Heimatkoordinate ersetzt die Segmentzugehoerigkeit
+     * als Aehnlichkeitskriterium (Auftraggeber-Vorgabe "naechstmoeglichster
+     * Nachbar").
+     *
+     * Qualifikationskriterium (Auftraggeber-Vorgabe "Weg von zuhause aus, der
+     * auch wieder nach Hause zurueckfuehrt", strikte Auslegung): die
+     * Aktivitaet selbst darf weder zuhause noch Arbeit/Bildung sein
+     * (isBlockingPurpose/isHomeActivity, wie zuvor), UND die UNMITTELBAR
+     * VORHERGEHENDE Aktivitaet im Plan DES BEITRAGENDEN AGENTEN muss zuhause
+     * sein (Hinweg von zuhause aus) UND die UNMITTELBAR FOLGENDE Aktivitaet
+     * (falls vorhanden) muss EBENFALLS zuhause sein (Rueckweg nach Hause) -
+     * ein direkter, unverzweigter Hin-/Rueckweg wie er auch beim Zielagenten
+     * eingefuegt wird (siehe insertCandidateTrip), keine laengere Wegekette
+     * mit weiteren Zwischenstopps. Die letzte, offene Aktivitaet des Tages
+     * (kein Nachfolger vorhanden) erfuellt "fuehrt wieder nach Hause" NICHT
+     * und scheidet damit als Vorlage aus.
+     */
+    private List<templateProvider> collectTemplateProviders(String homeType) {
+        List<templateProvider> result = new ArrayList<>();
 
         for (Person person : population.getPersons().values()) {
-            Object segmentValue = person.getAttributes().getAttribute(segmentAttribute);
-            if (segmentValue == null) {
-                continue;
-            }
-            String segmentId = segmentValue.toString();
-
             List<PlanElement> elements = person.getSelectedPlan().getPlanElements();
+            List<candidateTripTemplate> templates = new ArrayList<>();
+            Coord homeCoord = null;
+
             for (int i = 1; i < elements.size(); i++) {
                 if (!(elements.get(i) instanceof Activity activity) || isHomeActivity(activity.getType(), homeType)
                         || isBlockingPurpose(activity.getType())
                         || TripStructureUtils.isStageActivityType(activity.getType())) {
                     continue;
                 }
-                // Bugfix: bei frisch geladenen (noch ungerouteten) Plaenen ist
-                // Leg.getDepartureTime() IMMER UNDEFINED - die Abfahrtszeit steckt zu diesem
-                // Zeitpunkt nur in der end_time der VORAUSGEHENDEN Aktivitaet (elements.get(i-2),
-                // durch die Plan-Struktur Activity/Leg/Activity/... immer eine Activity, sobald
-                // elements.get(i) selbst eine Activity ist). Ein reiner precedingLeg.getDepartureTime()-
-                // Check verwarf dadurch AUSNAHMSLOS jede Kandidatenaktivitaet (0 Vorlagen aus 0
-                // Segmenten in echten Laeufen), nicht nur bei fehlender Zeitangabe.
+                // Bugfix (wie zuvor bei collectTemplates): bei frisch geladenen (noch
+                // ungerouteten) Plaenen ist Leg.getDepartureTime() IMMER UNDEFINED - die
+                // Abfahrtszeit steckt zu diesem Zeitpunkt nur in der end_time der
+                // VORAUSGEHENDEN Aktivitaet.
                 if (!(elements.get(i - 1) instanceof Leg) || i < 2
                         || !(elements.get(i - 2) instanceof Activity originActivity)
-                        || originActivity.getEndTime().isUndefined()) {
+                        || originActivity.getEndTime().isUndefined()
+                        || !isHomeActivity(originActivity.getType(), homeType)) {
                     continue;
                 }
+                int returnIndex = i + 2;
+                if (returnIndex >= elements.size()
+                        || !(elements.get(returnIndex) instanceof Activity returnActivity)
+                        || !isHomeActivity(returnActivity.getType(), homeType)) {
+                    continue;
+                }
+
+                if (homeCoord == null) {
+                    homeCoord = FacilitiesUtils.toFacility(originActivity, facilities).getCoord();
+                }
                 double typicalDuration = behaviourModule.parseActivityType(activity.getType()).typicalDurationSeconds();
-                candidateTripTemplate template = new candidateTripTemplate(
-                        activity, originActivity.getEndTime().seconds(), typicalDuration);
-                result.computeIfAbsent(segmentId, k -> new ArrayList<>()).add(template);
+                templates.add(new candidateTripTemplate(activity, originActivity.getEndTime().seconds(), typicalDuration));
+            }
+
+            if (!templates.isEmpty()) {
+                result.add(new templateProvider(person.getId(), homeCoord, templates));
             }
         }
         return result;
+    }
+
+    /**
+     * Nachbarschaftssuche fuer den Kandidatenweg (siehe Klassen-Javadoc
+     * "Nachbarschaftsauswahl"): sucht - beginnend beim naechsten Nachbarn in
+     * der GESAMTEN Population (unabhaengig vom Segment) und mit wachsendem
+     * Suchradius - den ersten qualifizierenden Vorlagen-Weg eines ANDEREN
+     * Agenten, der TATSAECHLICH in die bestehende Wegekette dieser Zielperson
+     * passt (siehe findInsertionBoundary). Passt der Weg des naechsten
+     * Nachbarn nicht (Tag bereits durch Arbeit/Bildung komplett verplant,
+     * oder die Vorlagen-Dauer sprengt das Tagesende), wird NICHT die ganze
+     * Person uebersprungen, sondern beim naechstnaeheren Nachbarn
+     * weitergesucht (Auftraggeber-Feedback "wenn Aktivitaetsplaene schon fuer
+     * den Tag voll, skippe einfach zu einem naechsten Agenten") - erst wenn
+     * KEIN Nachbar der gesamten Population einen passenden Weg liefert, ist
+     * das Ergebnis leer (die Person gilt dann als strukturell uebersprungen).
+     *
+     * Innerhalb eines Rings werden alle dort gefundenen, tatsaechlich
+     * passenden Kandidaten gesammelt und nach echter euklidischer Distanz
+     * sortiert; der Ring wird erst dann als abschliessend akzeptiert, wenn
+     * die kleinste dort gefundene Distanz hoechstens ring*cellSize betraegt -
+     * erst ab diesem Radius kann kein naeherer, noch nicht durchsuchter
+     * Nachbar mehr existieren (siehe homeLocationGrid-Klassen-Javadoc).
+     * Mehrere Vorlagen DESSELBEN Nachbarn werden chronologisch
+     * (startTimeSeconds) probiert, bevor zum naechsten Nachbarn gewechselt
+     * wird.
+     */
+    private Optional<templateSelection> selectNearestFittingTemplate(Id<Person> targetPersonId, Coord targetHomeCoord,
+            List<PlanElement> targetElements, homeLocationGrid grid) {
+
+        List<templateSelection> found = new ArrayList<>();
+        int maxRing = grid.maxRing(targetHomeCoord);
+
+        for (int ring = 0; ring <= maxRing; ring++) {
+            for (templateProvider provider : grid.expandingRing(targetHomeCoord, ring)) {
+                if (provider.personId().equals(targetPersonId)) {
+                    continue;
+                }
+                List<candidateTripTemplate> templates = new ArrayList<>(provider.templates());
+                templates.sort(Comparator.comparingDouble(candidateTripTemplate::startTimeSeconds));
+                for (candidateTripTemplate template : templates) {
+                    if (template.durationSeconds() >= END_OF_DAY_SECONDS) {
+                        continue;
+                    }
+                    insertionPoint boundary = findInsertionBoundary(targetElements, template.startTimeSeconds());
+                    if (boundary == null) {
+                        continue;
+                    }
+                    if (boundary.candidateStart() + template.durationSeconds() >= END_OF_DAY_SECONDS) {
+                        continue;
+                    }
+                    found.add(new templateSelection(provider, template, boundary));
+                    break; // erste passende Vorlage dieses Nachbarn reicht - naechster Nachbar statt naechste Vorlage
+                }
+            }
+
+            if (!found.isEmpty()) {
+                templateSelection closest = found.stream()
+                        .min(Comparator.comparingDouble(selection ->
+                                CoordUtils.calcEuclideanDistance(targetHomeCoord, selection.provider().homeCoord())))
+                        .orElseThrow();
+                double closestDistance = CoordUtils.calcEuclideanDistance(targetHomeCoord, closest.provider().homeCoord());
+                if (closestDistance <= (double) ring * grid.cellSize()) {
+                    return Optional.of(closest);
+                }
+                // sonst: ein noch naeherer Nachbar koennte in einem weiteren, noch nicht
+                // durchsuchten Ring liegen - found bleibt erhalten, Suche geht weiter.
+            }
+        }
+
+        return found.stream()
+                .min(Comparator.comparingDouble(selection ->
+                        CoordUtils.calcEuclideanDistance(targetHomeCoord, selection.provider().homeCoord())));
     }
 }

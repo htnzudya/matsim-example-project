@@ -135,11 +135,10 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 		// Gleichgewicht, sondern ein Drift. Fuer echte Konvergenz muesste
 		// lastIteration deutlich hoeher stehen (bei 1pct-Population kein
 		// Problem: ~3 Min/Iteration nach dem einmaligen ~10-Min-DVRP-Setup,
-		// siehe stopwatch.csv eines Testlaufs) - auf 15 angehoben (Auftraggeber-
-		// Vorgabe) fuer belastbarere Ergebnis-Laeufe als die vorherigen 10; fuer
-		// echte Konvergenz waere noch deutlich hoeher (z. B. 50, siehe
-		// Git-History) noetig.
-		config.controller().setLastIteration(15);
+		// siehe stopwatch.csv eines Testlaufs) - auf 10 zurueckgestellt
+		// (Auftraggeber-Vorgabe); fuer echte Konvergenz waere noch deutlich
+		// hoeher (z. B. 50, siehe Git-History) noetig.
+		config.controller().setLastIteration(10);
 
 		// Oberlausitz/Dresden nutzt bereits "home" als Heimataktivitaet - kein
 		// Override noetig (anders als equil mit "h").

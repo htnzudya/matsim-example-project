@@ -81,11 +81,12 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     /**
      * Ziel-Anteil der Agenten mit entscheidung==WEG fuer die ascNull-
      * Kalibrierung (Schritt 9), siehe ascNullKalibrierungAktiv-Javadoc.
-     * Default 0.21: 21% unterdrueckte Nachfrage laut aktueller Mid-2023-
-     * Umfrage (Auftraggeber-Vorgabe) - ersetzt den vorherigen, direkt im AVM-
-     * Szenario ermittelten Platzhalter-Zielwert von ~4% Zusatzweg-Quote.
+     * Default 0.25: aktualisierter Auftraggeber-Wert (25% unterdrueckte
+     * Nachfrage) - ersetzt den vorherigen Wert von 21%, der wiederum den
+     * urspruenglichen, direkt im AVM-Szenario ermittelten Platzhalter-
+     * Zielwert von ~4% Zusatzweg-Quote ersetzt hatte.
      */
-    private double ascNullKalibrierungZielanteil = 0.21;
+    private double ascNullKalibrierungZielanteil = 0.25;
 
     /**
      * "base" oder "avm" - Choice-Set der Nullalternative-Ziehung (siehe
@@ -99,6 +100,20 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
      * automatischen Doppellaufs ueber beide Welten.
      */
     private String kandidatenwegWelt = "avm";
+
+    /**
+     * Anteil der Population, der ueberhaupt einen Kandidatenweg angeboten
+     * bekommt (behaviourCandidateTripInserter, deterministisch per
+     * personSeed-Ziehung "candidateEligibility" ausgewaehlt - Agenten
+     * ausserhalb dieses Anteils bekommen GAR KEINEN Kandidatenweg, nicht
+     * einmal die Nachbarschaftssuche laeuft fuer sie).
+     * Default 1.0 (alle Agenten, bisheriges Verhalten). Bei einem Wert &lt;
+     * 1.0 aendert sich auch die Grundgesamtheit der ascNull-Kalibrierung
+     * (siehe calibrateAscNull-Javadoc "Nullalternative auch auf bestehende
+     * Wege"): dort zaehlen dann bestehende Wege ALLER Personen PLUS
+     * Kandidatenwege NUR dieses Anteils der Population.
+     */
+    private double kandidatenwegAgentAnteil = 1.0;
 
     /**
      * Schwellenwerte fuer die Zuordnung der hhIncome-Klasse (1-10, VSP-
@@ -304,6 +319,17 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     @StringSetter("kandidatenwegWelt")
     public void setKandidatenwegWelt(String kandidatenwegWelt) {
         this.kandidatenwegWelt = kandidatenwegWelt;
+    }
+
+    /** Siehe kandidatenwegAgentAnteil-Feld-Javadoc. */
+    @StringGetter("kandidatenwegAgentAnteil")
+    public double getKandidatenwegAgentAnteil() {
+        return kandidatenwegAgentAnteil;
+    }
+
+    @StringSetter("kandidatenwegAgentAnteil")
+    public void setKandidatenwegAgentAnteil(double kandidatenwegAgentAnteil) {
+        this.kandidatenwegAgentAnteil = kandidatenwegAgentAnteil;
     }
 
     /** Siehe einkommenSchwelleNiedrigMax-Feld-Javadoc. */
