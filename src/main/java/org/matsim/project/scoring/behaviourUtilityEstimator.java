@@ -98,11 +98,12 @@ public class behaviourUtilityEstimator extends AbstractTripRouterEstimator {
     private final long randomSeed;
     private final TimeInterpretation timeInterpretation;
     private final behaviourConfigGroup cfg;
+    private final behaviourHabitBaselineRegistry habitBaselineRegistry;
 
     @Inject
     public behaviourUtilityEstimator(TripRouter tripRouter, ActivityFacilities facilities,
             TimeInterpretation timeInterpretation, behaviourUtilityFunction utilityFunction,
-            behaviourConfigGroup cfg) {
+            behaviourConfigGroup cfg, behaviourHabitBaselineRegistry habitBaselineRegistry) {
         super(tripRouter, facilities, timeInterpretation, List.of());
 
         this.timeInterpretation = timeInterpretation;
@@ -112,6 +113,7 @@ public class behaviourUtilityEstimator extends AbstractTripRouterEstimator {
         this.segmentAttribute = cfg.getSegmentAttribute();
         this.randomSeed = cfg.getRandomSeed();
         this.cfg = cfg;
+        this.habitBaselineRegistry = habitBaselineRegistry;
     }
 
     @Override
@@ -156,7 +158,13 @@ public class behaviourUtilityEstimator extends AbstractTripRouterEstimator {
         double costPerKm = params.effectiveCostPerKm(cfg.hasTicket(person));
         TripContext tripContext = tripContextBuilder.buildTripContext(
                 timeInterpretation, trip.getDepartureTime(), routedTrip, costPerKm);
-        alternatives previousMode = alternatives.fromMatsimMode(trip.getInitialMode());
+
+        // Habit-Term wirkt auf die AUSGANGSLAGE (Auftraggeber-Vorgabe), nicht auf den
+        // jeweils letzten Iterationsstand - siehe behaviourHabitBaselineRegistry-Klassen-
+        // Javadoc: trip.getInitialMode() allein waere nach einer erfolgreichen Umplanung
+        // bereits der NEUE Modus, nicht mehr der urspruengliche.
+        String baselineMode = habitBaselineRegistry.resolveBaseline(person.getId(), trip.getIndex(), trip.getInitialMode());
+        alternatives previousMode = alternatives.fromMatsimMode(baselineMode);
 
         return utilityFunction.utility(profile, params, tripContext, previousMode);
     }

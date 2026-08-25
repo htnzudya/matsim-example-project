@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 import org.matsim.contribs.discrete_mode_choice.modules.AbstractDiscreteModeChoiceExtension;
 import org.matsim.project.model.alternatives;
 import org.matsim.project.scoring.behaviourCachedTripEstimator;
+import org.matsim.project.scoring.behaviourHabitBaselineRegistry;
 import org.matsim.project.scoring.behaviourUtilityEstimator;
 
 import com.google.inject.Provides;
@@ -28,6 +29,11 @@ import com.google.inject.Singleton;
  *    zugangs-Constraint fuer CA/AV, siehe dortigen Javadoc)
  *  - behaviourNonDcmModeTourFilter als TourFilter (schliesst BIKE/WALK/RIDE-
  *    Touren von der Umplanung aus, siehe dortigen Klassen-Javadoc)
+ *  - behaviourHabitBaselineRegistry (siehe dortigen Klassen-Javadoc) BEWUSST
+ *    ALS SINGLETON gebunden - anders als behaviourCachedTripEstimator/
+ *    behaviourUtilityEstimator oben: hier soll der Zustand GENAU ueber den
+ *    gesamten Lauf hinweg erhalten bleiben (Ausgangslage-Referenz fuer den
+ *    Habit-Term), nicht pro Injektion neu entstehen.
  * Wird von behaviourModule.install() eingebunden.
  */
 public final class behaviourDiscreteModeChoiceExtension extends AbstractDiscreteModeChoiceExtension {
@@ -38,6 +44,7 @@ public final class behaviourDiscreteModeChoiceExtension extends AbstractDiscrete
 
     @Override
     protected void installExtension() {
+        bind(behaviourHabitBaselineRegistry.class).in(Singleton.class);
         bind(behaviourUtilityEstimator.class);
         bindTripEstimator(TRIP_ESTIMATOR_NAME).to(behaviourCachedTripEstimator.class);
         bindModeAvailability(MODE_AVAILABILITY_NAME).to(behaviourModeAvailability.class);
