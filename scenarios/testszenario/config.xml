@@ -288,13 +288,13 @@
             <param name="costPerKm" value="0.2"/>
             <param name="costPerKmWithTicket" value="-1"/>
             <param name="deltaByPreviousMode" value="CA=0.831,AV=0,PT=0,PSAV=0,SSAV=0"/>
-            <param name="gamma" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=-0.4,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0.8,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
+            <param name="gamma" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=-0.2,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0.4,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
 
         <parameterset type="modeParams">
             <param name="mode" value="AV"/>
-            <param name="asc" value="-0.5"/>
+            <param name="asc" value="0"/>
             <param name="ascSd" value="0.6"/>
             <param name="betaInVehicleTime" value="-3.726"/>
             <param name="betaInVehicleTimeSd" value="3.78"/>
@@ -309,13 +309,13 @@
             <param name="costPerKm" value="0.21"/>
             <param name="costPerKmWithTicket" value="-1"/>
             <param name="deltaByPreviousMode" value="CA=0,AV=0.831,PT=0,PSAV=0,SSAV=0"/>
-            <param name="gamma" value="techAffinity=0.2,environmentalAwareness=0.4,sharingWillingness=-0.8,drivingEnjoyment=-0.2,perceivedUsefulness=0.4,perceivedEaseOfUse=0.2,trust=0.8,safetyPerception=0.4,perceivedRisk=-0.4,perceivedBehaviouralControl=0.4,socialNorm=0.4"/>
+            <param name="gamma" value="techAffinity=0.1,environmentalAwareness=0.2,sharingWillingness=-0.4,drivingEnjoyment=-0.1,perceivedUsefulness=0.2,perceivedEaseOfUse=0.1,trust=0.4,safetyPerception=0.2,perceivedRisk=-0.2,perceivedBehaviouralControl=0.2,socialNorm=0.2"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
 
         <parameterset type="modeParams">
             <param name="mode" value="PT"/>
-            <param name="asc" value="-1.2"/>
+            <param name="asc" value="0"/>
             <param name="ascSd" value="0.5"/>
             <param name="betaInVehicleTime" value="-3.462"/>
             <param name="betaInVehicleTimeSd" value="2.34"/>
@@ -330,13 +330,13 @@
             <param name="costPerKm" value="0.14"/>
             <param name="costPerKmWithTicket" value="0"/>
             <param name="deltaByPreviousMode" value="CA=0,AV=0,PT=0.831,PSAV=0,SSAV=0"/>
-            <param name="gamma" value="techAffinity=0,environmentalAwareness=0.2,sharingWillingness=0,drivingEnjoyment=-0.4,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0.8,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
+            <param name="gamma" value="techAffinity=0,environmentalAwareness=0.1,sharingWillingness=0,drivingEnjoyment=-0.2,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0.4,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
 
         <parameterset type="modeParams">
             <param name="mode" value="PSAV"/>
-            <param name="asc" value="-0.7"/>
+            <param name="asc" value="0"/>
             <param name="ascSd" value="0.65"/>
             <param name="betaInVehicleTime" value="-6.6"/>
             <param name="betaInVehicleTimeSd" value="2.34"/>
@@ -351,13 +351,13 @@
             <param name="costPerKm" value="0.38"/>
             <param name="costPerKmWithTicket" value="-1"/>
             <param name="deltaByPreviousMode" value="CA=0,AV=0,PT=0,PSAV=0.831,SSAV=0"/>
-            <param name="gamma" value="techAffinity=0.8,environmentalAwareness=0,sharingWillingness=0.4,drivingEnjoyment=-0.4,perceivedUsefulness=0.4,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0.8"/>
+            <param name="gamma" value="techAffinity=0.4,environmentalAwareness=0,sharingWillingness=0.2,drivingEnjoyment=-0.2,perceivedUsefulness=0.2,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0.4"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
 
         <parameterset type="modeParams">
             <param name="mode" value="SSAV"/>
-            <param name="asc" value="-1.1"/>
+            <param name="asc" value="0"/>
             <param name="ascSd" value="0.75"/>
             <param name="betaInVehicleTime" value="-6.18"/>
             <param name="betaInVehicleTimeSd" value="0"/>
@@ -372,7 +372,7 @@
             <param name="costPerKm" value="0.5"/>
             <param name="costPerKmWithTicket" value="-1"/>
             <param name="deltaByPreviousMode" value="CA=0,AV=0,PT=0,PSAV=0,SSAV=0.831"/>
-            <param name="gamma" value="techAffinity=0.4,environmentalAwareness=0.2,sharingWillingness=0.8,drivingEnjoyment=-0.4,perceivedUsefulness=0.8,perceivedEaseOfUse=0.2,trust=0.8,safetyPerception=0.8,perceivedRisk=-0.4,perceivedBehaviouralControl=0.8,socialNorm=0.8"/>
+            <param name="gamma" value="techAffinity=0.2,environmentalAwareness=0.1,sharingWillingness=0.4,drivingEnjoyment=-0.2,perceivedUsefulness=0.4,perceivedEaseOfUse=0.1,trust=0.4,safetyPerception=0.4,perceivedRisk=-0.2,perceivedBehaviouralControl=0.4,socialNorm=0.4"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
 
