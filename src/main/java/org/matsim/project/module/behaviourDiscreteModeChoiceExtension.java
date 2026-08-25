@@ -27,8 +27,13 @@ import com.google.inject.Singleton;
  *    freigegeben wurden.
  *  - behaviourModeAvailability als ModeAvailability (Fuehrerschein-/Fahrzeug-
  *    zugangs-Constraint fuer CA/AV, siehe dortigen Javadoc)
- *  - behaviourNonDcmModeTourFilter als TourFilter (schliesst BIKE/WALK/RIDE-
- *    Touren von der Umplanung aus, siehe dortigen Klassen-Javadoc)
+ *  - behaviourNonDcmModeTourFilter als TourFilter (schliesst Touren mit einem
+ *    nicht abgedeckten Modus von der Umplanung aus, siehe dortigen Klassen-
+ *    Javadoc - seit BIKE/WALK/RIDE echte DCM-Alternativen sind, greift das
+ *    nur noch als Sicherheitsnetz fuer wirklich unbekannte Modi)
+ *  - behaviourMaxTripsPerTourFilter als ZWEITER TourFilter (begrenzt die
+ *    Wege-pro-Tour, siehe dortigen Klassen-Javadoc - Schutz vor der
+ *    exhaustiven Modus-Kombinatorik des TourBasedModel bei 8 Alternativen)
  *  - behaviourHabitBaselineRegistry (siehe dortigen Klassen-Javadoc) BEWUSST
  *    ALS SINGLETON gebunden - anders als behaviourCachedTripEstimator/
  *    behaviourUtilityEstimator oben: hier soll der Zustand GENAU ueber den
@@ -41,6 +46,7 @@ public final class behaviourDiscreteModeChoiceExtension extends AbstractDiscrete
     public static final String TRIP_ESTIMATOR_NAME = "verhalten";
     public static final String MODE_AVAILABILITY_NAME = "verhalten";
     public static final String TOUR_FILTER_NAME = "verhalten";
+    public static final String MAX_TRIPS_TOUR_FILTER_NAME = "maxWegeProTour";
 
     @Override
     protected void installExtension() {
@@ -49,6 +55,7 @@ public final class behaviourDiscreteModeChoiceExtension extends AbstractDiscrete
         bindTripEstimator(TRIP_ESTIMATOR_NAME).to(behaviourCachedTripEstimator.class);
         bindModeAvailability(MODE_AVAILABILITY_NAME).to(behaviourModeAvailability.class);
         bindTourFilter(TOUR_FILTER_NAME).to(behaviourNonDcmModeTourFilter.class);
+        bindTourFilter(MAX_TRIPS_TOUR_FILTER_NAME).to(behaviourMaxTripsPerTourFilter.class);
     }
 
     /**

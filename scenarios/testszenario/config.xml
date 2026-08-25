@@ -46,6 +46,7 @@
         <param name="randomSeed" value="4711"/>
         <param name="segmentAttribute" value="segment"/>
         <param name="ascNullKalibrierungAktiv" value="false"/>
+        <param name="baselineAscKalibrierungAktiv" value="false"/>
         <param name="ascNullKalibrierungZielanteil" value="0.923361"/>
         <param name="kandidatenwegAgentAnteil" value="0.0415"/>
         <param name="einkommenSchwelleNiedrigMax" value="3"/>
@@ -315,7 +316,7 @@
 
         <parameterset type="modeParams">
             <param name="mode" value="PT"/>
-            <param name="asc" value="0"/>
+            <param name="asc" value="-0.603543"/>
             <param name="ascSd" value="0.5"/>
             <param name="betaInVehicleTime" value="-3.462"/>
             <param name="betaInVehicleTimeSd" value="2.34"/>
@@ -374,6 +375,69 @@
             <param name="deltaByPreviousMode" value="CA=0,AV=0,PT=0,PSAV=0,SSAV=0.831"/>
             <param name="gamma" value="techAffinity=0.2,environmentalAwareness=0.1,sharingWillingness=0.4,drivingEnjoyment=-0.2,perceivedUsefulness=0.4,perceivedEaseOfUse=0.1,trust=0.4,safetyPerception=0.4,perceivedRisk=-0.2,perceivedBehaviouralControl=0.4,socialNorm=0.4"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
+        </parameterset>
+
+        <!-- BIKE/WALK/RIDE (Auftraggeber-Vorgabe, siehe alternatives-Klassen-Javadoc):
+             laufen NUR ueber ihren ASC-Wert - keine SLR-Konstrukt-/Zeit-/Kostendaten
+             fuer diese drei Modi vorhanden, deshalb alle beta*/gamma auf 0. asc-Werte
+             kalibriert mit behaviourBaselineAscCalibrator am 2026-08-25 (1pct-Population,
+             29834 Wege ohne Kandidatenwege): CA bleibt feste Referenz (asc=0), PT/BIKE/
+             WALK/RIDE gemeinsam so kalibriert, dass die Softmax-Verteilung ueber
+             {CA,PT,BIKE,WALK,RIDE} den real erhobenen Modal Split trifft (CA=40,47%,
+             PT=24,89%, BIKE=12,37%, WALK=9,08%, RIDE=13,19% - alle Ziele exakt
+             erreicht, siehe output/output-oberlausitz-dresden-mini/baseline_asc_
+             kalibrierung.csv). MUSS nach jeder Aenderung an den PT-Koeffizienten oder
+             an der Population mit baselineAscKalibrierungAktiv=true neu kalibriert
+             werden. -->
+        <parameterset type="modeParams">
+            <param name="mode" value="BIKE"/>
+            <param name="asc" value="-4.079425"/>
+            <param name="ascSd" value="0"/>
+            <param name="betaInVehicleTime" value="0"/>
+            <param name="betaInVehicleTimeSd" value="0"/>
+            <param name="betaWaitTime" value="0"/>
+            <param name="betaWaitTimeSd" value="0"/>
+            <param name="betaCost" value="0"/>
+            <param name="betaCostSd" value="0"/>
+            <param name="costPerKm" value="0"/>
+            <param name="costPerKmWithTicket" value="-1"/>
+            <param name="deltaByPreviousMode" value=""/>
+            <param name="gamma" value=""/>
+            <param name="gammaSd" value=""/>
+        </parameterset>
+
+        <parameterset type="modeParams">
+            <param name="mode" value="WALK"/>
+            <param name="asc" value="-4.389112"/>
+            <param name="ascSd" value="0"/>
+            <param name="betaInVehicleTime" value="0"/>
+            <param name="betaInVehicleTimeSd" value="0"/>
+            <param name="betaWaitTime" value="0"/>
+            <param name="betaWaitTimeSd" value="0"/>
+            <param name="betaCost" value="0"/>
+            <param name="betaCostSd" value="0"/>
+            <param name="costPerKm" value="0"/>
+            <param name="costPerKmWithTicket" value="-1"/>
+            <param name="deltaByPreviousMode" value=""/>
+            <param name="gamma" value=""/>
+            <param name="gammaSd" value=""/>
+        </parameterset>
+
+        <parameterset type="modeParams">
+            <param name="mode" value="RIDE"/>
+            <param name="asc" value="-4.015665"/>
+            <param name="ascSd" value="0"/>
+            <param name="betaInVehicleTime" value="0"/>
+            <param name="betaInVehicleTimeSd" value="0"/>
+            <param name="betaWaitTime" value="0"/>
+            <param name="betaWaitTimeSd" value="0"/>
+            <param name="betaCost" value="0"/>
+            <param name="betaCostSd" value="0"/>
+            <param name="costPerKm" value="0"/>
+            <param name="costPerKmWithTicket" value="-1"/>
+            <param name="deltaByPreviousMode" value=""/>
+            <param name="gamma" value=""/>
+            <param name="gammaSd" value=""/>
         </parameterset>
 
     </module>

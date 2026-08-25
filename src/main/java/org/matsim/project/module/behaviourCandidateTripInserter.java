@@ -243,6 +243,16 @@ public final class behaviourCandidateTripInserter implements StartupListener {
      * dortigen Javadoc).
      */
     private void ensureVehicleId(Person person, String mode) {
+        ensureVehicleId(vehicles, person, mode);
+    }
+
+    /**
+     * Statische, wiederverwendbare Fassung (siehe Methoden-Javadoc oben) -
+     * package-private, damit auch behaviourBaselineAscCalibrator (dasselbe
+     * Paket) sie fuer CA-Routing waehrend der ASC-Kalibrierung nutzen kann,
+     * ohne die Logik ein zweites Mal zu pflegen.
+     */
+    static void ensureVehicleId(Vehicles vehicles, Person person, String mode) {
         if (VehicleUtils.hasVehicleId(person, mode)) {
             return;
         }
@@ -394,6 +404,18 @@ public final class behaviourCandidateTripInserter implements StartupListener {
      * die normale Moduswahl der uebrigen Wege (behaviourModeAvailability)
      * bleibt davon unberuehrt, siehe cfg.kandidatenwegWelt-Javadoc.
      */
+    /**
+     * Die fuenf "Hightech"-Alternativen, fuer die der Kandidatenweg-Mechanismus
+     * ueberhaupt gedacht ist (siehe Klassen-Javadoc). BEWUSST NICHT
+     * EnumSet.allOf(alternatives.class): seit BIKE/WALK/RIDE Teil des Enums
+     * sind (siehe alternatives-Klassen-Javadoc), wuerde "allOf" sie hier
+     * faelschlich als moegliches Kandidatenweg-Verkehrsmittel zulassen - die
+     * Nullalternative-Entscheidung soll aber unveraendert nur zwischen CA/AV/
+     * PT/PSAV/SSAV (bzw. in der Basiswelt nur CA/PT) und "kein Weg" waehlen.
+     */
+    private static final Set<alternatives> AVM_CHOICE_SET = EnumSet.of(
+            alternatives.CA, alternatives.AV, alternatives.PT, alternatives.PSAV, alternatives.SSAV);
+
     private static Set<alternatives> buildWorldChoiceSet(String kandidatenwegWelt) {
         if ("base".equalsIgnoreCase(kandidatenwegWelt)) {
             return EnumSet.of(alternatives.CA, alternatives.PT);
@@ -402,7 +424,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             throw new IllegalArgumentException("Unbekannter Wert '" + kandidatenwegWelt
                     + "' fuer verhaltensmodell.kandidatenwegWelt - erwartet 'base' oder 'avm'.");
         }
-        return EnumSet.allOf(alternatives.class);
+        return AVM_CHOICE_SET;
     }
 
     /**

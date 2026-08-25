@@ -79,6 +79,20 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     private boolean ascNullKalibrierungAktiv = false;
 
     /**
+     * Schaltet den behaviourBaselineAscCalibrator-Kalibrierungslauf ein
+     * (Auftraggeber-Vorgabe: BIKE/WALK/RIDE als echte DCM-Alternativen mit
+     * einem gemeinsam mit PT kalibrierten ASC-Wert, siehe dortigen Klassen-
+     * Javadoc). Beendet den Prozess nach dem Schreiben des Ergebnisses
+     * (System.exit), genau wie ascNullKalibrierungAktiv - NIEMALS beide
+     * gleichzeitig auf true setzen (welcher StartupListener zuerst laeuft,
+     * ist nicht garantiert, der andere Kalibrierungslauf wuerde dann nie
+     * ausgefuehrt). Ergebnis wird geloggt und nach
+     * baseline_asc_kalibrierung.csv im outputDirectory geschrieben. Default
+     * false: normaler Lauf.
+     */
+    private boolean baselineAscKalibrierungAktiv = false;
+
+    /**
      * Ziel-Anteil der Agenten mit entscheidung==WEG fuer die ascNull-
      * Kalibrierung (Schritt 9), siehe ascNullKalibrierungAktiv-Javadoc.
      * Default 0.25: aktualisierter Auftraggeber-Wert (25% unterdrueckte
@@ -144,6 +158,21 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
      * Gewohnheitsbonus, wie vor Einfuehrung dieser Dreiecksverteilung).
      */
     private double habitDreieckBreiteRechts = 0.0;
+
+    /**
+     * Obergrenze der Wege-pro-Tour, die dem DCM ueberhaupt zur Umplanung
+     * vorgelegt werden (siehe behaviourMaxTripsPerTourFilter-Klassen-Javadoc)
+     * - Touren mit MEHR Wegen bleiben komplett unveraendert wie erhoben.
+     * Noetig, weil DMCs TourBasedModel fuer eine Tour mit k Wegen ALLE
+     * (Anzahl Alternativen)^k Modus-Kombinationen exhaustiv durchprobiert -
+     * bei 8 Alternativen (seit BIKE/WALK/RIDE, siehe alternatives-Klassen-
+     * Javadoc) fuehrten die laengsten real vorkommenden Touren (bis zu 9
+     * Wege, 8^9 ≈ 134 Mio. Kombinationen) zu einem OutOfMemoryError.
+     * Default 5 (8^5 = 32.768 Kombinationen im schlimmsten Fall) -
+     * PLATZHALTER, nicht aus einer systematischen Performance-Analyse
+     * hergeleitet, nur empirisch als "laeuft stabil" bestaetigt.
+     */
+    private int maxWegeProTourFuerDcm = 5;
 
     /**
      * Name des Person-Attributs, das ein bereits vorhandenes Abo/Zeitkarte
@@ -313,6 +342,17 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
         this.ascNullKalibrierungAktiv = ascNullKalibrierungAktiv;
     }
 
+    /** Siehe baselineAscKalibrierungAktiv-Feld-Javadoc. */
+    @StringGetter("baselineAscKalibrierungAktiv")
+    public boolean getBaselineAscKalibrierungAktiv() {
+        return baselineAscKalibrierungAktiv;
+    }
+
+    @StringSetter("baselineAscKalibrierungAktiv")
+    public void setBaselineAscKalibrierungAktiv(boolean baselineAscKalibrierungAktiv) {
+        this.baselineAscKalibrierungAktiv = baselineAscKalibrierungAktiv;
+    }
+
     /** Siehe ascNullKalibrierungZielanteil-Feld-Javadoc. */
     @StringGetter("ascNullKalibrierungZielanteil")
     public double getAscNullKalibrierungZielanteil() {
@@ -376,6 +416,17 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     @StringSetter("habitDreieckBreiteRechts")
     public void setHabitDreieckBreiteRechts(double habitDreieckBreiteRechts) {
         this.habitDreieckBreiteRechts = habitDreieckBreiteRechts;
+    }
+
+    /** Siehe maxWegeProTourFuerDcm-Feld-Javadoc. */
+    @StringGetter("maxWegeProTourFuerDcm")
+    public int getMaxWegeProTourFuerDcm() {
+        return maxWegeProTourFuerDcm;
+    }
+
+    @StringSetter("maxWegeProTourFuerDcm")
+    public void setMaxWegeProTourFuerDcm(int maxWegeProTourFuerDcm) {
+        this.maxWegeProTourFuerDcm = maxWegeProTourFuerDcm;
     }
 
     @StringGetter("classifierWeightAge")

@@ -150,14 +150,18 @@ public final class behaviourModule extends AbstractModule {
         // aus alternatives.java, nicht aus einer XML-Modusliste.
         dmcConfig.setModeAvailability(behaviourDiscreteModeChoiceExtension.MODE_AVAILABILITY_NAME);
 
-        // BIKE/WALK/RIDE sind keine DCM-Alternativen (siehe alternatives.java) - ohne
-        // diesen Filter wandelt DiscreteModeChoice erhobene BIKE/WALK/RIDE-Touren zwar
-        // IN eine der fuenf Alternativen um, aber NIE zurueck (einseitige, rein
-        // mechanische Ausblutung Richtung 0%, kein Verhaltensgleichgewicht - siehe
-        // behaviourNonDcmModeTourFilter-Klassen-Javadoc). Solche Touren bleiben
-        // deshalb komplett ausserhalb der Umplanung, unveraendert wie erhoben; die
-        // fuenf DCM-Alternativen bleiben untereinander frei waehlbar.
-        dmcConfig.setTourFilters(List.of(behaviourDiscreteModeChoiceExtension.TOUR_FILTER_NAME));
+        // behaviourNonDcmModeTourFilter: Sicherheitsnetz fuer Touren mit einem
+        // wirklich nicht abgedeckten Modus (seit BIKE/WALK/RIDE echte DCM-
+        // Alternativen sind, siehe alternatives-Klassen-Javadoc, greift das
+        // praktisch nie mehr, schadet aber nicht). behaviourMaxTripsPerTourFilter:
+        // begrenzt die Wege-pro-Tour (siehe dortigen Klassen-Javadoc) - noetig, weil
+        // DMCs TourBasedModel bei 8 Alternativen fuer lange Touren sonst in einen
+        // OutOfMemoryError laeuft (beobachtet). Beide Filter zusammen per UND
+        // (DMCs CompositeTourFilter) - eine Tour muss BEIDE passieren, um ueberhaupt
+        // zur Umplanung zugelassen zu werden.
+        dmcConfig.setTourFilters(List.of(
+                behaviourDiscreteModeChoiceExtension.TOUR_FILTER_NAME,
+                behaviourDiscreteModeChoiceExtension.MAX_TRIPS_TOUR_FILTER_NAME));
 
         // Schritt 7 (Netzwerkrouting): AV nutzt dasselbe Strassennetz wie CA und
         // erlebt dieselbe Stau-Dynamik, statt teleportiert zu werden. Dazu reicht es,
@@ -611,5 +615,10 @@ public final class behaviourModule extends AbstractModule {
         // "kein Weg" + verfuegbare Modi), ob er eingefuegt wird - siehe
         // behaviourCandidateTripInserter-Klassen-Javadoc.
         addControllerListenerBinding().to(behaviourCandidateTripInserter.class);
+
+        // ASC-Kalibrierung fuer BIKE/WALK/RIDE (nur aktiv, wenn
+        // verhaltensmodell.baselineAscKalibrierungAktiv=true gesetzt ist) - siehe
+        // behaviourBaselineAscCalibrator-Klassen-Javadoc.
+        addControllerListenerBinding().to(behaviourBaselineAscCalibrator.class);
     }
 }

@@ -33,13 +33,27 @@ import java.util.stream.Collectors;
  * MATSim-Standardmodi ("car"/"pt"); AV/PSAV/SSAV sind Platzhalter-Modusstrings,
  * die erst mit der Routing-/Fahrzeugkonfiguration aus Schritt 7 tatsaechlich
  * simulierbar werden (aktuell z. B. noch nicht im equil-Szenario aktiv).
+ *
+ * BIKE/WALK/RIDE (Auftraggeber-Vorgabe): die drei erhobenen "klassischen"
+ * Modi, fuer die es KEINE SLR-Konstrukt-/Zeit-/Kostendaten gibt (die gesamte
+ * gamma/beta-Struktur stammt aus einer Studie speziell zur AVM-Akzeptanz).
+ * Sie laufen deshalb NUR ueber ihren ASC-Wert (modeParams mit allen
+ * Beta- und Gamma-Koeffizienten auf 0, siehe behaviourBaselineAscCalibrator-Klassen-Javadoc
+ * fuer die Kalibrierung dieser ASC-Werte gegen den real erhobenen Modal
+ * Split). Vorher (siehe Git-History) waren Touren mit diesen Modi komplett
+ * von der Umplanung ausgeschlossen (behaviourNonDcmModeTourFilter) - das ist
+ * damit obsolet, DCM_MODES dort baut sich aus alternatives.values() und
+ * schliesst diese drei jetzt automatisch mit ein.
  */
 public enum alternatives {
     CA("car"),
     AV("av"),
     PT("pt"),
     PSAV("psav"),
-    SSAV("ssav");
+    SSAV("ssav"),
+    BIKE("bike"),
+    WALK("walk"),
+    RIDE("ride");
 
     private final String matsimMode;
 
