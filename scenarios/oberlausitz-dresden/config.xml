@@ -21,11 +21,28 @@
 	     6 Kerne, DrtConfigGroup.numberOfThreads faellt sonst per Default auf
 	     Runtime.getRuntime().availableProcessors() zurueck und wuerde bei
 	     mehreren DRT-Modi (PSAV+SSAV) potenziell mehr Threads anfordern, als
-	     tatsaechlich sinnvoll parallelisierbar sind. -->
+	     tatsaechlich sinnvoll parallelisierbar sind.
+
+	     global.numberOfThreads wird NUR von der DCM-Umplanung genutzt (QSim/DRT
+	     haben je einen eigenen, unten separat gesetzten Wert von 6, siehe
+	     qsim/multiModeDrt-Module) - war zwischenzeitlich auf 12 hochgesetzt,
+	     dann wieder auf 6 zurueckgestellt: bei einem echten 10pct/40-Iterationen-
+	     Lauf trat nach ~25 Iterationen (7h) ein Absturz auf (zwei DCM-Replanning-
+	     Threads lasen GLEICHZEITIG denselben korrupten Link-Index -1543301172 an
+	     zwei verschiedenen Stellen - TravelTimeCalculator fuer CA/AV-Routing UND
+	     DvrpOfflineTravelTimeEstimator fuer PSAV/SSAV-Routing gleichzeitig -
+	     klare Signatur einer Race Condition, vermutlich weil DRTs Routing-/
+	     Reisezeit-Komponenten fuer DRTs EIGENE, kontrolliertere Dispatch-Logik
+	     gebaut sind, nicht fuer den Aufruf aus 12 parallelen DCM-Replanning-
+	     Threads gleichzeitig). Weniger Threads in der Umplanung senken die
+	     Wahrscheinlichkeit, dieses seltene Zeitfenster zu treffen - kostet nur
+	     die Umplanungsphase selbst (~2 von ~17 Min/Iteration im beobachteten
+	     Lauf), nicht die QSim-/DRT-Simulation, die ohnehin schon bei 6 Threads
+	     laeuft. -->
 	<module name="global">
 		<param name="coordinateSystem" value="EPSG:25832"/>
 		<param name="insistingOnDeprecatedConfigVersion" value="false"/>
-		<param name="numberOfThreads" value="12"/>
+		<param name="numberOfThreads" value="6"/>
 	</module>
 
 	<module name="network">
