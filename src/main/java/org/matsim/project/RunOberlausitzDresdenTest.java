@@ -138,7 +138,7 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 		// siehe stopwatch.csv eines Testlaufs) - auf 10 zurueckgestellt
 		// (Auftraggeber-Vorgabe); fuer echte Konvergenz waere noch deutlich
 		// hoeher (z. B. 50, siehe Git-History) noetig.
-		config.controller().setLastIteration(2);
+		config.controller().setLastIteration(40);
 
 		// Oberlausitz/Dresden nutzt bereits "home" als Heimataktivitaet - kein
 		// Override noetig (anders als equil mit "h").
@@ -503,5 +503,22 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 		// Zugriff, deshalb hier statt dort.
 		controler.configureQSimComponents(
 				DvrpQSimComponents.activateAllModes(MultiModeDrtConfigGroup.get(controler.getConfig())));
+
+		// Wanduhr-Obergrenze fuer lange Laeufe (Auftraggeber-Vorgabe: max. 3 Tage
+		// ODER lastIteration, je nachdem was zuerst eintritt) - siehe
+		// wallClockOrIterationTerminationCriterion-Klassen-Javadoc: wird NUR
+		// zwischen Iterationen geprueft, die laufende Iteration wird immer sauber
+		// zu Ende gefuehrt. Ueber die Umgebungsvariable MAX_RUNTIME_SECONDS
+		// ueberschreibbar (dieselbe Variable wie in
+		// scripts/run-oberlausitz-dresden-with-timeout.sh, das als reines
+		// Sicherheitsnetz fuer einen komplett haengenden Prozess danebensteht).
+		long maxRuntimeSeconds = 3L * 24 * 60 * 60; // 3 Tage
+		String override = System.getenv("MAX_RUNTIME_SECONDS");
+		if (override != null && !override.isBlank()) {
+			maxRuntimeSeconds = Long.parseLong(override.trim());
+		}
+		long deadlineEpochMillis = System.currentTimeMillis() + maxRuntimeSeconds * 1000L;
+		controler.setTerminationCriterion(new wallClockOrIterationTerminationCriterion(
+				controler.getConfig().controller().getLastIteration(), deadlineEpochMillis));
 	}
 }
