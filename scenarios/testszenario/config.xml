@@ -51,15 +51,17 @@
         <param name="kandidatenwegAgentAnteil" value="0.0415"/>
         <param name="einkommenSchwelleNiedrigMax" value="3"/>
         <param name="einkommenSchwelleHochMin" value="8"/>
-        <param name="habitDreieckBreiteRechts" value="0.8"/>
+        <param name="habitDreieckBreiteRechts" value="0.831"/>
         <!-- Traegheits-/Gewohnheitsbonus (deltaByPreviousMode=0.831 je Diagonaleintrag,
              siehe dortigen Kommentar) ist ab jetzt nicht mehr deterministisch, sondern
-             dreiecksverteilt: Dreieck(min=0, modus=0.831, max=0.831+0.8=1.631) - links
-             IMMER bis 0 (Auftraggeber-Vorgabe "Dreieck bis 0"), rechts um 0.8 ueber den
-             Modus hinaus (Auftraggeber-Vorgabe "0,8 pro Seite", hier nur noch rechts
-             angewendet, da links durch "bis 0" ersetzt). Keine SD-Daten aus der Studie
-             verfuegbar, daher Dreiecksverteilung statt Normalverteilung wie bei den
-             uebrigen Koeffizienten (siehe modeParams-Klassen-Javadoc). -->
+             dreiecksverteilt: Dreieck(min=0, modus=0.831, max=0.831+0.831=1.662) - links
+             IMMER bis 0 (Auftraggeber-Vorgabe "Dreieck bis 0"), rechts um 0.831 ueber den
+             Modus hinaus (aktualisierte Auftraggeber-Vorgabe vom 2026-08-26, ersetzt
+             den vorherigen Wert 0.8: rechte Breite = derselbe Wert wie der Modus
+             selbst, hier nur noch rechts angewendet, da links durch "bis 0" ersetzt).
+             Keine SD-Daten aus der Studie verfuegbar, daher Dreiecksverteilung statt
+             Normalverteilung wie bei den uebrigen Koeffizienten (siehe modeParams-
+             Klassen-Javadoc). -->
         <!-- Einkommensstufe fuer die Kostensensitivitaet (betaCost/-Niedrig/-Hoch,
              siehe incomeTier-Klassen-Javadoc): hhIncome (1-10, VSP-Population)
              <= 3 -> NIEDRIG, >= 8 -> HOCH, sonst MITTEL. An der realen
@@ -67,7 +69,7 @@
              (10pct-Lauf, 112.952 Agenten): Klassen 1-3 zusammen ~10,4% der
              Agenten, Klassen 8-10 zusammen ~14,5%, Klassen 4-7 (Mehrheit,
              ~75,1%) als "mittel" - kein amtlicher MiD/SrV-Schwellenwert. -->
-        <param name="ascNull" value="-7.431269"/>
+        <param name="ascNull" value="-7.685577"/>
         <!-- Nullalternative im DCM (siehe behaviourCandidateTripInserter):
              ascNull per Schritt-9-Bisektion (behaviourCandidateTripInserter.
              calibrateAscNull(), verhaltensmodell.ascNullKalibrierungAktiv=true).
@@ -82,13 +84,15 @@
              Wege-Pool (bestehende erhobene Wege JEDER Person PLUS Kandidatenwege der
              4,15%-Stichprobe) in der Basiswelt (CA/PT) nicht genommen werden ->
              ascNullKalibrierungZielanteil (WEG-Anteil, Komplement von X) = 1-0.07664
-             = 0.923361. Erreicht 92.3331% ueber 27988/30312 Wegen (ascnull_kalibrierung.csv
-             eines 1pct-Kalibrierungslaufs vom 2026-08-26, NACH Aktualisierung der
-             Segmentierungs-Konstrukte in ferigeSegmentierungParameter.xlsx - bewusst
+             = 0.923361. Erreicht 92.3364% ueber 27989/30312 Wegen (ascnull_kalibrierung.csv
+             eines 1pct-Kalibrierungslaufs vom 2026-08-26, NACH Entfernen aller
+             ascSd-Werte (AV/PT/PSAV/SSAV auf 0), Anhebung von habitDreieckBreiteRechts
+             auf 0.831 UND Neukalibrierung der PT/BIKE/WALK/RIDE-Baseline-ASC - bewusst
              NUR ein schneller Korrektheitscheck, noch KEINE 10pct-Kalibrierung wie bei
              den vorherigen Werten; bei Bedarf spaeter mit groesserer Population
              wiederholen).
-             Vorherige Werte (siehe Git-History): -7.623435 (vor der Segmentierungs-
+             Vorherige Werte (siehe Git-History): -7.431269 (nach der Segmentierungs-
+             Aktualisierung, vor Entfernen der ascSd-Werte), -7.623435 (vor der Segmentierungs-
              Aktualisierung, sonst identische Ziel-/Stichprobenparameter), -4.827446
              (kandidatenwegAgentAnteil=0.15, 30%-Ziel), -4.827262 (kandidatenwegAgentAnteil=
              0.10, 20%-Ziel), -5.314434 (kandidatenwegAgentAnteil=0.20), -0.572000
@@ -299,7 +303,7 @@
         <parameterset type="modeParams">
             <param name="mode" value="AV"/>
             <param name="asc" value="0"/>
-            <param name="ascSd" value="0.6"/>
+            <param name="ascSd" value="0"/>
             <param name="betaInVehicleTime" value="-3.726"/>
             <param name="betaInVehicleTimeSd" value="3.78"/>
             <param name="betaWaitTime" value="-6.72"/>
@@ -319,8 +323,8 @@
 
         <parameterset type="modeParams">
             <param name="mode" value="PT"/>
-            <param name="asc" value="0.185072"/>
-            <param name="ascSd" value="0.5"/>
+            <param name="asc" value="-0.381859"/>
+            <param name="ascSd" value="0"/>
             <param name="betaInVehicleTime" value="-3.462"/>
             <param name="betaInVehicleTimeSd" value="2.34"/>
             <param name="betaWaitTime" value="-5.28"/>
@@ -341,7 +345,7 @@
         <parameterset type="modeParams">
             <param name="mode" value="PSAV"/>
             <param name="asc" value="0"/>
-            <param name="ascSd" value="0.65"/>
+            <param name="ascSd" value="0"/>
             <param name="betaInVehicleTime" value="-6.6"/>
             <param name="betaInVehicleTimeSd" value="2.34"/>
             <param name="betaWaitTime" value="-6.72"/>
@@ -362,7 +366,7 @@
         <parameterset type="modeParams">
             <param name="mode" value="SSAV"/>
             <param name="asc" value="0"/>
-            <param name="ascSd" value="0.75"/>
+            <param name="ascSd" value="0"/>
             <param name="betaInVehicleTime" value="-6.18"/>
             <param name="betaInVehicleTimeSd" value="0"/>
             <param name="betaWaitTime" value="-6.72"/>
@@ -385,17 +389,29 @@
              fuer diese drei Modi vorhanden, deshalb alle beta*/gamma auf 0. asc-Werte
              kalibriert mit behaviourBaselineAscCalibrator am 2026-08-26 (1pct-Population,
              29834 Wege ohne Kandidatenwege, NACH Aktualisierung der Segmentierungs-
-             Konstrukte in ferigeSegmentierungParameter.xlsx): CA bleibt feste Referenz
-             (asc=0), PT/BIKE/WALK/RIDE gemeinsam so kalibriert, dass die Softmax-
-             Verteilung ueber {CA,PT,BIKE,WALK,RIDE} den real erhobenen Modal Split
-             trifft (CA=40,47%, PT=24,89%, BIKE=12,37%, WALK=9,08%, RIDE=13,19% - alle
-             Ziele exakt erreicht, siehe output/output-oberlausitz-dresden-mini/
-             baseline_asc_kalibrierung.csv). MUSS nach jeder Aenderung an den
-             PT-Koeffizienten, den Segmentierungs-Konstrukten oder an der Population
-             mit baselineAscKalibrierungAktiv=true neu kalibriert werden. -->
+             Konstrukte in ferigeSegmentierungParameter.xlsx UND NACH Entfernen aller
+             ascSd-Werte (AV/PT/PSAV/SSAV auf 0 gesetzt) sowie Anhebung von
+             habitDreieckBreiteRechts auf 0.831): CA bleibt feste Referenz (asc=0),
+             PT/BIKE/WALK/RIDE gemeinsam so kalibriert, dass die Softmax-Verteilung
+             ueber {CA,PT,BIKE,WALK,RIDE} den real erhobenen Modal Split trifft
+             (CA=40,47%, PT=24,89%, BIKE=12,37%, WALK=9,08%, RIDE=13,19% - alle Ziele
+             exakt erreicht, siehe output/output-oberlausitz-dresden-mini/
+             baseline_asc_kalibrierung.csv). PT-ASC vorher +0.185072 (mit ascSd=0.5),
+             jetzt -0.381859 (ascSd=0) - der Vorzeichenwechsel ist erwartbar: ohne
+             Streuung muss der Mittelwert allein denselben Zielanteil treffen, den
+             vorher Mittelwert+Rauschen gemeinsam erreicht haben; BIKE/WALK/RIDE
+             praktisch unveraendert (sie haengen nur indirekt ueber die Restanteile
+             von PTs Streuung ab). WICHTIG: Phase 1 der Kalibrierung baeckt den
+             KONFIGURIERTEN PT-asc-Wert bereits in die "ohne ASC"-Nutzenwerte ein
+             (siehe behaviourBaselineAscCalibrator-Klassen-Javadoc/routeAndEstimate) -
+             vor jedem Kalibrierungslauf MUESSEN PT/BIKE/WALK/RIDE-asc erst auf 0
+             zurueckgesetzt werden, sonst wird nur ein DELTA statt des vollen ASC
+             geschrieben. MUSS nach jeder Aenderung an den PT-Koeffizienten, den
+             Segmentierungs-Konstrukten, ascSd-Werten oder an der Population mit
+             baselineAscKalibrierungAktiv=true neu kalibriert werden. -->
         <parameterset type="modeParams">
             <param name="mode" value="BIKE"/>
-            <param name="asc" value="-3.884044"/>
+            <param name="asc" value="-3.878339"/>
             <param name="ascSd" value="0"/>
             <param name="betaInVehicleTime" value="0"/>
             <param name="betaInVehicleTimeSd" value="0"/>
@@ -412,7 +428,7 @@
 
         <parameterset type="modeParams">
             <param name="mode" value="WALK"/>
-            <param name="asc" value="-4.193731"/>
+            <param name="asc" value="-4.188026"/>
             <param name="ascSd" value="0"/>
             <param name="betaInVehicleTime" value="0"/>
             <param name="betaInVehicleTimeSd" value="0"/>
@@ -429,7 +445,7 @@
 
         <parameterset type="modeParams">
             <param name="mode" value="RIDE"/>
-            <param name="asc" value="-3.820285"/>
+            <param name="asc" value="-3.814579"/>
             <param name="ascSd" value="0"/>
             <param name="betaInVehicleTime" value="0"/>
             <param name="betaInVehicleTimeSd" value="0"/>
