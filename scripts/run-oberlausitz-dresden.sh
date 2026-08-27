@@ -4,20 +4,20 @@
 #
 # JVM-Heap ueber Umgebungsvariablen anpassbar, z. B. bei anderem WSL-RAM-Limit:
 #   JAVA_XMX=20g JAVA_XMS=4g bash scripts/run-oberlausitz-dresden.sh
-# Default (28g/4g): hochgesetzt, nachdem mehr RAM verfuegbar wurde - bei 14g
-# lief die 10pct-Population mit den SAV-DRT-Flotten (Schritt 8/9) nicht
-# zuverlaessig durch (OOM zuletzt sogar erst in der Analyse-/Output-Phase,
-# nicht nur beim Matrix-Aufbau - siehe Commit-Historie). ACHTUNG: braucht
-# entsprechend mehr System-RAM als Puffer fuers Betriebssystem obendrauf -
-# bei WSL muss .wslconfig memory= entsprechend hoeher als 28g liegen, sonst
-# genau dasselbe Problem wie vorher, nur bei einer groesseren Zahl. Bei
-# WSL-Limit 29g+2g Swap bleibt damit nur ein sehr duenner Puffer (~1g
-# physisch + Swap) - bewusst so gewaehlt trotz Warnung, im Zweifel zuerst
-# beobachten (MemoryObserver-Log), ob das reicht.
+# Default (22g/4g): bei 14g lief die 10pct-Population mit den SAV-DRT-Flotten
+# (Schritt 8/9) nicht zuverlaessig durch (OOM zuletzt sogar erst in der
+# Analyse-/Output-Phase, nicht nur beim Matrix-Aufbau - siehe Commit-Historie).
+# ACHTUNG: braucht entsprechend mehr System-RAM als Puffer fuers Betriebssystem
+# obendrauf - bei WSL muss .wslconfig memory= entsprechend hoeher als Xmx
+# liegen, sonst genau dasselbe Problem wie vorher, nur bei einer groesseren
+# Zahl. 22g gewaehlt fuer ein 32GB-Gesamtsystem mit .wslconfig memory=27-28g
+# (WSL-eigener Overhead: Metaspace/Thread-Stacks/Direct-Memory/Linux selbst)
+# UND 4GB fest fuer Windows reserviert - bei mehr Gesamt-RAM entsprechend
+# hochsetzbar.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-JAVA_XMX="${JAVA_XMX:-28g}"
+JAVA_XMX="${JAVA_XMX:-22g}"
 JAVA_XMS="${JAVA_XMS:-4g}"
 
 ./mvnw -q compile
