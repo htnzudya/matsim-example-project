@@ -399,26 +399,44 @@ public final class behaviourCandidateTripInserter implements StartupListener {
      * Choice-Set der Nullalternative-Ziehung nach verhaltensmodell.
      * kandidatenwegWelt (Schritt 5 der Auftraggeber-Spezifikation
      * "Implementierungsspezifikation: Kandidatenwege mit Nullalternative"):
-     * "base" = nur CA/PT (keine automatisierte Mobilitaet), "avm" = alle
-     * fuenf Alternativen. Wirkt NUR hier auf den Kandidatenweg-Mechanismus -
-     * die normale Moduswahl der uebrigen Wege (behaviourModeAvailability)
-     * bleibt davon unberuehrt, siehe cfg.kandidatenwegWelt-Javadoc.
+     * "base" = BASE_CHOICE_SET (keine automatisierte Mobilitaet), "avm" =
+     * BASE_CHOICE_SET plus AV/PSAV/SSAV (AVM_CHOICE_SET). Wirkt NUR hier auf
+     * den Kandidatenweg-Mechanismus - die normale Moduswahl der uebrigen Wege
+     * (behaviourModeAvailability) bleibt davon unberuehrt, siehe
+     * cfg.kandidatenwegWelt-Javadoc.
      */
     /**
-     * Die fuenf "Hightech"-Alternativen, fuer die der Kandidatenweg-Mechanismus
-     * ueberhaupt gedacht ist (siehe Klassen-Javadoc). BEWUSST NICHT
-     * EnumSet.allOf(alternatives.class): seit BIKE/WALK/RIDE Teil des Enums
-     * sind (siehe alternatives-Klassen-Javadoc), wuerde "allOf" sie hier
-     * faelschlich als moegliches Kandidatenweg-Verkehrsmittel zulassen - die
-     * Nullalternative-Entscheidung soll aber unveraendert nur zwischen CA/AV/
-     * PT/PSAV/SSAV (bzw. in der Basiswelt nur CA/PT) und "kein Weg" waehlen.
+     * "Basiswelt" fuer die ascNull-Kalibrierung/f-Berechnung (siehe calibrateAscNull-Javadoc,
+     * kandidatenwegRow-Javadoc "GLOBALE KONVERSIONSRATE f") sowie fuer buildWorldChoiceSet("base").
+     * Alle Modi, die HEUTE (ohne AV/PSAV/SSAV) bereits real existieren - Korrektur vom 2026-08-29
+     * (Auftraggeber-Feedback): vorher nur CA/PT, das verarmte die Basiswelt kuenstlich und trieb
+     * p0Base systematisch zu hoch (weniger Konkurrenz gegen ascNull), wodurch f faelschlich einen
+     * Teil des "Bike/Walk/Ride fehlen"-Effekts als AVM-Effekt auswies statt nur den tatsaechlichen
+     * AV/PSAV/SSAV-Effekt zu isolieren.
      */
-    private static final Set<alternatives> AVM_CHOICE_SET = EnumSet.of(
-            alternatives.CA, alternatives.AV, alternatives.PT, alternatives.PSAV, alternatives.SSAV);
+    private static final Set<alternatives> BASE_CHOICE_SET = EnumSet.of(
+            alternatives.CA, alternatives.PT, alternatives.BIKE, alternatives.WALK, alternatives.RIDE);
+
+    /**
+     * Die avm-Welt fuer den Kandidatenweg-Mechanismus (siehe Klassen-Javadoc) - MUSS eine echte
+     * Obermenge von BASE_CHOICE_SET sein (Korrektur vom 2026-08-29: vorher nur die fuenf
+     * "Hightech"-Alternativen CA/AV/PT/PSAV/SSAV, OHNE Bike/Walk/Ride - dadurch war die avm-Welt
+     * KEINE Erweiterung der Basiswelt mehr, sondern verlor Bike/Walk/Ride UND gewann AV/PSAV/SSAV
+     * gleichzeitig; der Vergleich p_avm-p_base mass dadurch nicht mehr den reinen AVM-Effekt,
+     * sondern "AVM-Effekt minus Bike/Walk/Ride-Effekt" - fuehrte im Test zu p_base &gt; p_avm und
+     * damit zu einer auf 0 geklemmten Konversionsrate f). Jetzt: BASE_CHOICE_SET plus die drei
+     * echten AVM-Alternativen AV/PSAV/SSAV.
+     */
+    private static final Set<alternatives> AVM_CHOICE_SET = EnumSet.copyOf(BASE_CHOICE_SET);
+    static {
+        AVM_CHOICE_SET.add(alternatives.AV);
+        AVM_CHOICE_SET.add(alternatives.PSAV);
+        AVM_CHOICE_SET.add(alternatives.SSAV);
+    }
 
     private static Set<alternatives> buildWorldChoiceSet(String kandidatenwegWelt) {
         if ("base".equalsIgnoreCase(kandidatenwegWelt)) {
-            return EnumSet.of(alternatives.CA, alternatives.PT);
+            return BASE_CHOICE_SET;
         }
         if (!"avm".equalsIgnoreCase(kandidatenwegWelt)) {
             throw new IllegalArgumentException("Unbekannter Wert '" + kandidatenwegWelt
@@ -490,10 +508,18 @@ public final class behaviourCandidateTripInserter implements StartupListener {
         double scaleParameter = cfg.getScaleParameter();
         Set<alternatives> worldChoiceSet = buildWorldChoiceSet(cfg.getKandidatenwegWelt());
         // ascNull ist AUSSCHLIESSLICH in der Basiswelt kalibriert (siehe calibrateAscNull-
-        // Javadoc) - fuer die Basisentscheidung (Phase 2) gilt deshalb IMMER CA/PT, unabhaengig
-        // vom konfigurierten kandidatenwegWelt (siehe kandidatenwegRow-Javadoc "ZWEISTUFIGE
-        // ENTSCHEIDUNG").
-        Set<alternatives> baseChoiceSet = EnumSet.of(alternatives.CA, alternatives.PT);
+        // Javadoc) - fuer die Basisentscheidung gilt deshalb IMMER dieselbe Basiswelt,
+        // unabhaengig vom konfigurierten kandidatenwegWelt (siehe kandidatenwegRow-Javadoc
+        // "GLOBALE KONVERSIONSRATE f"). Die Basiswelt umfasst alle heute (ohne AV/PSAV/SSAV)
+        // bereits real existierenden Modi - nicht nur CA/PT, sondern auch BIKE/WALK/RIDE (siehe
+        // BASE_CHOICE_SET-Javadoc): sonst wuerde die Basiswelt kuenstlich verarmt, p0Base
+        // systematisch zu hoch (weniger Konkurrenz gegen ascNull) und f faelschlich einen Teil
+        // des "Bike/Walk/Ride fehlen"-Effekts als AVM-Effekt ausweisen.
+        Set<alternatives> baseChoiceSet = BASE_CHOICE_SET;
+        // Muss fuer BEIDE Welten geroutet werden - worldChoiceSet fuer p0Avm, baseChoiceSet
+        // (jetzt auch BIKE/WALK/RIDE, siehe BASE_CHOICE_SET-Javadoc) fuer p0Base.
+        Set<alternatives> neededAlternatives = EnumSet.copyOf(worldChoiceSet);
+        neededAlternatives.addAll(baseChoiceSet);
         List<kandidatenwegRow> csvRows = new ArrayList<>();
         List<logsumRow> logsumRows = new ArrayList<>();
         List<pendingCandidate> pending = new ArrayList<>();
@@ -587,16 +613,16 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             // statt einen zweiten, hier eigenstaendig eingefuehrten harten Cutoff zu pflegen.
             Collection<String> availableModes = modeAvailability.getAvailableModes(person, List.of());
             for (alternatives alternative : modeParamsByAlternative.keySet()) {
-                if (!worldChoiceSet.contains(alternative)) {
+                if (!neededAlternatives.contains(alternative)) {
                     continue;
                 }
                 if (!availableModes.contains(alternative.getMatsimMode())) {
                     continue;
                 }
-                // Bugfix: CA/AV brauchen fuer netzwerkbasiertes Routing eine Fahrzeug-ID je
+                // Bugfix: CA/AV/BIKE brauchen fuer netzwerkbasiertes Routing eine Fahrzeug-ID je
                 // Person (VehicleUtils.getVehicleId(...)) - die legt MATSim normalerweise erst
                 // in PersonPrepareForSim an, das NACH allen notifyStartup-Listenern laeuft
-                // (siehe Klassen-Javadoc). Ohne diesen Vorgriff scheitert JEDES CA/AV-Routing
+                // (siehe Klassen-Javadoc). Ohne diesen Vorgriff scheitert JEDES CA/AV/BIKE-Routing
                 // hier IMMER mit "Could not retrieve vehicle id from person" - unabhaengig von
                 // Distanz/Nutzenwerten. ensureVehicleId(...) legt sie bei Bedarf schon jetzt an,
                 // exakt nach demselben Verfahren wie PrepareForSimImpl.
@@ -605,7 +631,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                 // Zuordnung ueber VehicleUtils.insertVehicleIdsIntoPersonAttributes) - spaeter
                 // findet PersonPrepareForSim dann bereits eine bestehende ID vor und legt keine
                 // zweite an (siehe dortiges hasVehicleId-Guard).
-                if (alternative == alternatives.CA || alternative == alternatives.AV) {
+                if (alternative == alternatives.CA || alternative == alternatives.AV || alternative == alternatives.BIKE) {
                     ensureVehicleId(person, alternative.getMatsimMode());
                 }
 
@@ -937,7 +963,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
      * braucht dafuer mehrere Minuten (siehe Git-Historie), 40x davon waere
      * unpraktikabel. Deshalb hier explizit in zwei Phasen getrennt: Phase 1
      * (teuer, EINMAL) berechnet je Weg (bestehend ODER Kandidat) die
-     * gerouteten CA/PT-Nutzenwerte UND die deterministische Ziehung
+     * gerouteten Basiswelt-Nutzenwerte (BASE_CHOICE_SET) UND die deterministische Ziehung
      * nullAlternativeDraw - beide sind unabhaengig von ascNull, das nur die
      * Nullalternative selbst betrifft. Phase 2 (billig, 40x) wiederholt nur
      * noch Softmax+Ziehung ueber die in Phase 1 bereits berechneten Werte -
@@ -960,7 +986,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
         String segmentAttribute = cfg.getSegmentAttribute();
         double targetShare = cfg.getAscNullKalibrierungZielanteil();
         double agentAnteil = cfg.getKandidatenwegAgentAnteil();
-        Set<alternatives> baseChoiceSet = EnumSet.of(alternatives.CA, alternatives.PT);
+        Set<alternatives> baseChoiceSet = BASE_CHOICE_SET;
 
         Map<alternatives, modeParams> modeParamsByAlternative = cfg.buildModeParams();
         Map<String, agentProfile> segmentsById = cfg.buildSegments();
@@ -969,7 +995,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
 
         int totalPopulation = population.getPersons().size();
         log.info(String.format(Locale.ROOT,
-                "ascNull-Kalibrierung: Phase 1 (Routing CA/PT, Basiswelt, einmalig) fuer alle bestehenden "
+                "ascNull-Kalibrierung: Phase 1 (Routing Basiswelt CA/PT/BIKE/WALK/RIDE, einmalig) fuer alle bestehenden "
                         + "Wege von %d Personen PLUS Kandidatenwege einer %.4f-Stichprobe, Ziel-WEG-Anteil %.4f...",
                 totalPopulation, agentAnteil, targetShare));
 
@@ -982,7 +1008,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             // NEU: jeder bestehende (bereits erhobene) Weg dieser Person - siehe Methoden-Javadoc
             // "Neuer Ansatz". TripStructureUtils.getTrips liefert echte Wegeendpunkte (ueberspringt
             // ggf. vorhandene Stage-/Interaktionsaktivitaeten automatisch), unabhaengig vom
-            // tatsaechlich gewaehlten Modus wird hier ausschliesslich CA/PT bewertet (Basiswelt).
+            // tatsaechlich gewaehlten Modus wird hier ausschliesslich im BASE_CHOICE_SET bewertet.
             List<TripStructureUtils.Trip> existingTrips = TripStructureUtils.getTrips(person.getSelectedPlan());
             for (int tripIndex = 0; tripIndex < existingTrips.size(); tripIndex++) {
                 TripStructureUtils.Trip trip = existingTrips.get(tripIndex);
@@ -1000,7 +1026,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                     if (!baseChoiceSet.contains(alternative) || !availableModes.contains(alternative.getMatsimMode())) {
                         continue;
                     }
-                    if (alternative == alternatives.CA) {
+                    if (alternative == alternatives.CA || alternative == alternatives.BIKE) {
                         ensureVehicleId(person, alternative.getMatsimMode());
                     }
                     modeParams meanParams = modeParamsByAlternative.get(alternative);
@@ -1058,7 +1084,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                 if (!baseChoiceSet.contains(alternative) || !availableModes.contains(alternative.getMatsimMode())) {
                     continue;
                 }
-                if (alternative == alternatives.CA) {
+                if (alternative == alternatives.CA || alternative == alternatives.BIKE) {
                     ensureVehicleId(person, alternative.getMatsimMode());
                 }
                 modeParams meanParams = modeParamsByAlternative.get(alternative);
@@ -1119,7 +1145,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
 
         double finalShare = (double) wegCountAtMid / totalWege;
         log.info(String.format(Locale.ROOT,
-                "ascNull-Kalibrierung fertig: ascNull=%.6f (WEG-Anteil %.4f, Ziel %.4f, Basiswelt CA/PT, "
+                "ascNull-Kalibrierung fertig: ascNull=%.6f (WEG-Anteil %.4f, Ziel %.4f, Basiswelt CA/PT/BIKE/WALK/RIDE, "
                         + "%d/%d Wege, 40 Bisektionsschritte).",
                 mid, finalShare, targetShare, wegCountAtMid, totalWege));
         writeCalibrationResult(mid, targetShare, finalShare, wegCountAtMid, totalWege);
