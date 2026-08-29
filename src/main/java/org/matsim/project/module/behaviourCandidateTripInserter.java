@@ -437,28 +437,35 @@ public final class behaviourCandidateTripInserter implements StartupListener {
      * mit leeren Feldern, sofern zu diesem Zeitpunkt der Verarbeitung noch
      * nicht bekannt - siehe Anwendungsstellen in notifyStartup.
      *
-     * ZWEISTUFIGE ENTSCHEIDUNG (Korrektur vom 2026-08-29, ersetzt die vorherige
+     * GLOBALE KONVERSIONSRATE f (Korrektur vom 2026-08-29, ersetzt die vorherige
      * Version die den Kandidatenweg direkt per Softmax ueber das komplette
      * avm-Choice-Set entschied): ascNull ist AUSSCHLIESSLICH in der Basiswelt
      * (CA/PT) kalibriert (siehe calibrateAscNull-Javadoc) - die direkte
      * Anwendung von ascNull auf ein groesseres avm-Choice-Set war inkonsistent
      * (mehr/attraktivere Alternativen im Softmax-Nenner senken p0 automatisch,
-     * unabhaengig von ascNull, siehe behaviourUtilityFunction.softmax). Neu:
-     * erst wird die Basiswelt-Entscheidung getroffen (p0Base, nur CA/PT+
-     * ascNull), DANACH werden nur die dort abgelehnten Kandidaten mit einer
-     * global (populationsweit) hergeleiteten Konversionsrate f = (p_avm -
-     * p_base) / (1 - p_base) "gerettet" - p_base/p_avm sind dabei die
-     * erwarteten (nicht gezogenen) Wege-Anteile ueber ALLE bewerteten
-     * Kandidaten dieses Laufs, siehe notifyStartup. f ist fuer alle Personen
-     * gleich (eine einzige Zahl je Lauf), daher hier NICHT als Spalte gefuehrt
-     * (siehe Log-Zusammenfassung).
+     * unabhaengig von ascNull, siehe behaviourUtilityFunction.softmax).
+     *
+     * Neu (Auftraggeber-Klarstellung 2026-08-29): f = (p_avm - p_base) /
+     * (1 - p_base) - der Anteil der Kandidatenwege, der in der avm-Welt
+     * GEGENUEBER der Basiswelt zusaetzlich gewaehlt wird - wird EINMAL
+     * POPULATIONSWEIT aus den erwarteten (nicht gezogenen) Wege-Anteilen ueber
+     * ALLE bewerteten Kandidaten dieses Laufs berechnet (siehe notifyStartup),
+     * und dann UNABHAENGIG vom individuellen Basisergebnis jedes einzelnen
+     * Kandidaten als FLACHE Wahrscheinlichkeit auf JEDEN Kandidaten angewendet
+     * (ein einziger Zug je Kandidat gegen f) - NICHT als "Rettung" nur der in
+     * der Basiswelt abgelehnten Kandidaten. Die individuelle Basisentscheidung
+     * (basisEntscheidung) hat damit KEINEN Einfluss mehr auf das tatsaechliche
+     * Ergebnis dieses Kandidaten, sie fliesst nur noch in die Berechnung von f
+     * ein und wird rein zu Diagnosezwecken mitgefuehrt. f ist fuer alle
+     * Personen gleich (eine einzige Zahl je Lauf), daher hier NICHT als Spalte
+     * gefuehrt (siehe Log-Zusammenfassung).
      *
      * p0Base/p0Avm: Nullalternative-Wahrscheinlichkeit dieses Kandidaten in
      * der jeweiligen Welt (null, wenn nicht bekannt/nicht anwendbar - z. B.
      * strukturell uebersprungen). basisEntscheidung: "WEG" oder
-     * "NULLALTERNATIVE" - Ergebnis der REINEN Basiswelt-Ziehung, BEVOR die
-     * Konversionschance angewendet wird. entscheidung/modus: das TATSAECHLICHE
-     * Endergebnis (nach Konversion, im avm-Choice-Set gewaehlter Modus).
+     * "NULLALTERNATIVE" - Ergebnis der REINEN Basiswelt-Ziehung (nur
+     * Diagnose, siehe oben). entscheidung/modus: das TATSAECHLICHE Endergebnis
+     * (nach dem flachen f-Zug, im avm-Choice-Set gewaehlter Modus).
      */
     private record kandidatenwegRow(String personId, String segment, Double distanzMeter, String zweck,
             Double p0Base, Double p0Avm, String basisEntscheidung, String entscheidung, String modus) {
@@ -645,10 +652,10 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                     destinationActivity, duration, utilities, p0Base, p0Avm));
         }
 
-        // PHASE 2a: globale Konversionsrate f (siehe kandidatenwegRow-Javadoc "ZWEISTUFIGE
-        // ENTSCHEIDUNG"). Erwartungswert (KEINE zusaetzliche Ziehung) ueber ALLE Kandidaten
-        // dieser Phase, damit f nicht selbst schon Stichprobenrauschen in die einzelnen
-        // Konversionsziehungen der Phase 2b traegt.
+        // PHASE 2a: globale Konversionsrate f (siehe kandidatenwegRow-Javadoc "GLOBALE
+        // KONVERSIONSRATE f"). Erwartungswert (KEINE zusaetzliche Ziehung) ueber ALLE Kandidaten
+        // dieser Phase, damit f nicht selbst schon Stichprobenrauschen in den flachen
+        // Einfuege-Zug der Phase 2b traegt.
         double sumBaseTaken = 0.0, sumAvmTaken = 0.0;
         for (pendingCandidate candidate : pending) {
             sumBaseTaken += 1.0 - candidate.p0Base();
@@ -661,33 +668,30 @@ public final class behaviourCandidateTripInserter implements StartupListener {
 
         log.info(String.format(Locale.ROOT,
                 "Nullalternative: Konversionsrate f=%.4f (p_base=%.4f, p_avm=%.4f ueber %d Kandidaten) - Anteil der "
-                        + "in der Basiswelt abgelehnten Kandidaten, der durch die avm-Alternativen \"gerettet\" wird.",
+                        + "Kandidatenwege, der in der avm-Welt gegenueber der Basiswelt zusaetzlich gewaehlt wird; "
+                        + "wird als flache Wahrscheinlichkeit auf JEDEN Kandidaten angewendet, unabhaengig von "
+                        + "dessen individueller Basisentscheidung.",
                 f, pBase, pAvm, pending.size()));
 
-        // PHASE 2b: je Kandidat erst die Basisentscheidung (CA/PT, ascNull), danach - nur bei
-        // Ablehnung dort - die Konversionsziehung mit der oben berechneten Rate f.
-        int inserted = 0, insertedViaBase = 0, insertedViaConversion = 0, skippedNullChosen = 0;
+        // PHASE 2b: EIN flacher Zug je Kandidat gegen die globale Rate f (Auftraggeber-Klarstellung
+        // 2026-08-29: f ist NICHT nur eine "Rettung" der Basiswelt-Ablehnungen, sondern gilt
+        // UNABHAENGIG vom individuellen Basisergebnis fuer JEDEN Kandidaten gleichermassen - die
+        // Basisentscheidung fliesst nur noch in die Berechnung von f (Phase 2a) ein, nicht mehr in
+        // die einzelne Einfuege-Entscheidung). basisEntscheidung wird trotzdem weiter je Kandidat
+        // ermittelt und in der CSV mitgefuehrt - rein zu Diagnosezwecken (Vergleich Basis- vs.
+        // tatsaechliches Ergebnis), OHNE Einfluss auf "insert".
+        int inserted = 0, skippedNullChosen = 0;
         for (pendingCandidate candidate : pending) {
             Map<Optional<alternatives>, Double> baseUtilities = filterChoiceSet(candidate.utilities(), baseChoiceSet);
             Map<Optional<alternatives>, Double> baseProbabilities = behaviourUtilityFunction.softmax(baseUtilities, scaleParameter);
             double baseDraw = new Random(tripContextBuilder.personSeed(randomSeed, candidate.person().getId(),
                     "nullAlternativeBaseDraw")).nextDouble();
             boolean baseChosen = behaviourUtilityFunction.drawFromCumulative(baseProbabilities, baseDraw).isPresent();
+            String basisEntscheidung = baseChosen ? "WEG" : "NULLALTERNATIVE";
 
-            String basisEntscheidung;
-            boolean insert;
-            if (baseChosen) {
-                basisEntscheidung = "WEG";
-                insert = true;
-            } else {
-                basisEntscheidung = "NULLALTERNATIVE";
-                double conversionDraw = new Random(tripContextBuilder.personSeed(randomSeed, candidate.person().getId(),
-                        "nullAlternativeConversionDraw")).nextDouble();
-                insert = conversionDraw < f;
-                if (insert) {
-                    insertedViaConversion++;
-                }
-            }
+            double insertDraw = new Random(tripContextBuilder.personSeed(randomSeed, candidate.person().getId(),
+                    "nullAlternativeInsertDraw")).nextDouble();
+            boolean insert = insertDraw < f;
 
             if (!insert) {
                 skippedNullChosen++;
@@ -697,14 +701,10 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                         "NULLALTERNATIVE", null));
                 continue;
             }
-            if (baseChosen) {
-                insertedViaBase++;
-            }
 
-            // Konkreter Modus: sobald feststeht, dass ein Weg stattfindet (per Basisentscheidung
-            // ODER per Konversion), zaehlt fuer die MODUSWAHL die volle avm-Alternativenmenge -
-            // die Person lebt in der avm-Welt und waehlt unter deren tatsaechlich verfuegbaren
-            // Alternativen, selbst wenn die Basisentscheidung schon (mit CA oder PT) "WEG" war.
+            // Konkreter Modus: sobald feststeht, dass ein Weg stattfindet, zaehlt fuer die
+            // MODUSWAHL die volle avm-Alternativenmenge - die Person lebt in der avm-Welt und
+            // waehlt unter deren tatsaechlich verfuegbaren Alternativen.
             Map<alternatives, Double> realAlternatives = new LinkedHashMap<>();
             for (Map.Entry<Optional<alternatives>, Double> entry : candidate.utilities().entrySet()) {
                 entry.getKey().ifPresent(alt -> realAlternatives.put(alt, entry.getValue()));
@@ -725,13 +725,12 @@ public final class behaviourCandidateTripInserter implements StartupListener {
         }
 
         log.info(String.format(Locale.ROOT,
-                "Nullalternative: %d/%d Agenten mit Kandidatenweg eingefuegt (direkt per Basisentscheidung: %d, "
-                        + "per Konversion mit f=%.4f zusaetzlich gerettet: %d; nicht in der Stichprobe "
-                        + "(kandidatenwegAgentAnteil=%.4f): %d, Nullalternative (Basis+Konversion) gewaehlt: %d, "
-                        + "kein freier Zeitpunkt (Arbeit/Bildung): %d, keine Vorlage: %d, kein Modus verfuegbar/"
-                        + "routbar: %d).",
-                inserted, total, insertedViaBase, f, insertedViaConversion, agentAnteil, skippedNotSampled,
-                skippedNullChosen, skippedNoFreeSlot, skippedNoTemplate, skippedNoModeAvailable));
+                "Nullalternative: %d/%d Agenten mit Kandidatenweg eingefuegt (flacher Zug gegen f=%.4f, "
+                        + "unabhaengig von der individuellen Basisentscheidung; nicht in der Stichprobe "
+                        + "(kandidatenwegAgentAnteil=%.4f): %d, Nullalternative gewaehlt: %d, kein freier Zeitpunkt "
+                        + "(Arbeit/Bildung): %d, keine Vorlage: %d, kein Modus verfuegbar/routbar: %d).",
+                inserted, total, f, agentAnteil, skippedNotSampled, skippedNullChosen, skippedNoFreeSlot,
+                skippedNoTemplate, skippedNoModeAvailable));
 
         writeKandidatenwegeCsv(csvRows);
         writeLogsumCsv(logsumRows);
