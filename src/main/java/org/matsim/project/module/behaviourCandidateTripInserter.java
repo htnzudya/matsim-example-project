@@ -434,15 +434,34 @@ public final class behaviourCandidateTripInserter implements StartupListener {
      * zwei Werte, strukturelle Ueberspringungs-Faelle (kein Modus verfuegbar/
      * routbar, keine Vorlage, kein freier Zeitpunkt) werden hier ebenfalls
      * als NULLALTERNATIVE gefuehrt (es findet so oder so kein Weg statt),
-     * mit leeren u/p0/distanz/zweck-Feldern, sofern zu diesem Zeitpunkt der
-     * Verarbeitung noch nicht bekannt - siehe Anwendungsstellen in
-     * notifyStartup. Ausnahme "kein Modus verfuegbar/routbar": dort ist
-     * p0=1.0 deterministisch (nur die Nullalternative im Choice-Set, siehe
-     * Spezifikation Testfall 7), auch wenn keine tatsaechliche Ziehung
-     * stattfand.
+     * mit leeren Feldern, sofern zu diesem Zeitpunkt der Verarbeitung noch
+     * nicht bekannt - siehe Anwendungsstellen in notifyStartup.
+     *
+     * ZWEISTUFIGE ENTSCHEIDUNG (Korrektur vom 2026-08-29, ersetzt die vorherige
+     * Version die den Kandidatenweg direkt per Softmax ueber das komplette
+     * avm-Choice-Set entschied): ascNull ist AUSSCHLIESSLICH in der Basiswelt
+     * (CA/PT) kalibriert (siehe calibrateAscNull-Javadoc) - die direkte
+     * Anwendung von ascNull auf ein groesseres avm-Choice-Set war inkonsistent
+     * (mehr/attraktivere Alternativen im Softmax-Nenner senken p0 automatisch,
+     * unabhaengig von ascNull, siehe behaviourUtilityFunction.softmax). Neu:
+     * erst wird die Basiswelt-Entscheidung getroffen (p0Base, nur CA/PT+
+     * ascNull), DANACH werden nur die dort abgelehnten Kandidaten mit einer
+     * global (populationsweit) hergeleiteten Konversionsrate f = (p_avm -
+     * p_base) / (1 - p_base) "gerettet" - p_base/p_avm sind dabei die
+     * erwarteten (nicht gezogenen) Wege-Anteile ueber ALLE bewerteten
+     * Kandidaten dieses Laufs, siehe notifyStartup. f ist fuer alle Personen
+     * gleich (eine einzige Zahl je Lauf), daher hier NICHT als Spalte gefuehrt
+     * (siehe Log-Zusammenfassung).
+     *
+     * p0Base/p0Avm: Nullalternative-Wahrscheinlichkeit dieses Kandidaten in
+     * der jeweiligen Welt (null, wenn nicht bekannt/nicht anwendbar - z. B.
+     * strukturell uebersprungen). basisEntscheidung: "WEG" oder
+     * "NULLALTERNATIVE" - Ergebnis der REINEN Basiswelt-Ziehung, BEVOR die
+     * Konversionschance angewendet wird. entscheidung/modus: das TATSAECHLICHE
+     * Endergebnis (nach Konversion, im avm-Choice-Set gewaehlter Modus).
      */
-    private record kandidatenwegRow(String personId, String segment, Double distanzMeter, String zweck, Double u,
-            Double p0, String entscheidung, String modus) {
+    private record kandidatenwegRow(String personId, String segment, Double distanzMeter, String zweck,
+            Double p0Base, Double p0Avm, String basisEntscheidung, String entscheidung, String modus) {
     }
 
     @Override
@@ -461,9 +480,16 @@ public final class behaviourCandidateTripInserter implements StartupListener {
         long randomSeed = cfg.getRandomSeed();
         String segmentAttribute = cfg.getSegmentAttribute();
         double agentAnteil = cfg.getKandidatenwegAgentAnteil();
+        double scaleParameter = cfg.getScaleParameter();
         Set<alternatives> worldChoiceSet = buildWorldChoiceSet(cfg.getKandidatenwegWelt());
+        // ascNull ist AUSSCHLIESSLICH in der Basiswelt kalibriert (siehe calibrateAscNull-
+        // Javadoc) - fuer die Basisentscheidung (Phase 2) gilt deshalb IMMER CA/PT, unabhaengig
+        // vom konfigurierten kandidatenwegWelt (siehe kandidatenwegRow-Javadoc "ZWEISTUFIGE
+        // ENTSCHEIDUNG").
+        Set<alternatives> baseChoiceSet = EnumSet.of(alternatives.CA, alternatives.PT);
         List<kandidatenwegRow> csvRows = new ArrayList<>();
         List<logsumRow> logsumRows = new ArrayList<>();
+        List<pendingCandidate> pending = new ArrayList<>();
 
         Map<alternatives, modeParams> modeParamsByAlternative = cfg.buildModeParams();
         Map<String, agentProfile> segmentsById = cfg.buildSegments();
@@ -475,9 +501,12 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                 + "Kandidatenweg (direkter Hin-/Rueckweg von/nach Hause, ohne Arbeit/Bildung) als Vorlagen-Pool "
                 + "fuer die Nachbarschaftssuche gesammelt.");
 
-        int total = 0, inserted = 0, skippedNotSampled = 0, skippedNoTemplate = 0, skippedNoFreeSlot = 0,
-                skippedNoModeAvailable = 0, skippedNullChosen = 0;
+        int total = 0, skippedNotSampled = 0, skippedNoTemplate = 0, skippedNoFreeSlot = 0, skippedNoModeAvailable = 0;
 
+        // PHASE 1: Sampling/Vorlagenwahl/Routing wie bisher - aber statt sofort zu entscheiden,
+        // werden je Kandidat nur die Nutzenwerte (Basis- UND avm-Welt) berechnet und in "pending"
+        // gesammelt. Die eigentliche Entscheidung (Phase 2) braucht zuerst die POPULATIONSWEITE
+        // Konversionsrate f, die sich erst aus ALLEN Kandidaten zusammen ergibt.
         for (Person person : population.getPersons().values()) {
             total++;
 
@@ -488,18 +517,17 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             if (!isCandidateEligible(person, randomSeed, agentAnteil)) {
                 skippedNotSampled++;
                 person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:notSampled");
-                csvRows.add(new kandidatenwegRow(personId, segment, null, null, null, null, "NULLALTERNATIVE", null));
+                csvRows.add(new kandidatenwegRow(personId, segment, null, null, null, null, null, "NULLALTERNATIVE", null));
                 continue;
             }
 
-            Plan plan = person.getSelectedPlan();
-            List<PlanElement> elements = plan.getPlanElements();
+            List<PlanElement> elements = person.getSelectedPlan().getPlanElements();
 
             Coord homeCoord = allProviders.isEmpty() ? null : resolveHomeCoord(person, homeType);
             if (homeCoord == null) {
                 skippedNoTemplate++;
                 person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noTemplate");
-                csvRows.add(new kandidatenwegRow(personId, segment, null, null, null, null, "NULLALTERNATIVE", null));
+                csvRows.add(new kandidatenwegRow(personId, segment, null, null, null, null, null, "NULLALTERNATIVE", null));
                 continue;
             }
 
@@ -511,7 +539,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                 // selectNearestFittingTemplate-Javadoc.
                 skippedNoFreeSlot++;
                 person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noFreeSlot");
-                csvRows.add(new kandidatenwegRow(personId, segment, null, null, null, null, "NULLALTERNATIVE", null));
+                csvRows.add(new kandidatenwegRow(personId, segment, null, null, null, null, null, "NULLALTERNATIVE", null));
                 continue;
             }
 
@@ -600,43 +628,146 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             logsumRows.add(buildLogsumRow(personId, segment, utilities));
 
             if (utilities.size() == 1) {
-                // nur die Nullalternative selbst (kein Modus verfuegbar/routbar) - keine echte Wahl
-                // moeglich, P(0)=1 deterministisch (Spezifikation Testfall 7, siehe
+                // nur die Nullalternative selbst (kein Modus verfuegbar/routbar, weder Basis-
+                // noch avm-Welt) - keine echte Wahl moeglich, unabhaengig von f (siehe
                 // kandidatenwegRow-Javadoc).
                 skippedNoModeAvailable++;
                 person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "skipped:noModeAvailable");
-                csvRows.add(new kandidatenwegRow(personId, segment, distanzMeter, zweck, null, 1.0, "NULLALTERNATIVE", null));
+                csvRows.add(new kandidatenwegRow(personId, segment, distanzMeter, zweck, 1.0, 1.0, "NULLALTERNATIVE",
+                        "NULLALTERNATIVE", null));
                 continue;
             }
 
-            Map<Optional<alternatives>, Double> probabilities = behaviourUtilityFunction.softmax(utilities, cfg.getScaleParameter());
-            double draw = new Random(tripContextBuilder.personSeed(randomSeed, person.getId(), "nullAlternativeDraw")).nextDouble();
-            Optional<alternatives> chosen = behaviourUtilityFunction.drawFromCumulative(probabilities, draw);
-            double p0 = probabilities.get(Optional.<alternatives>empty());
+            double p0Base = extractP0(utilities, baseChoiceSet, scaleParameter);
+            double p0Avm = extractP0(utilities, worldChoiceSet, scaleParameter);
 
-            if (chosen.isEmpty()) {
+            pending.add(new pendingCandidate(person, personId, segment, distanzMeter, zweck, boundary,
+                    destinationActivity, duration, utilities, p0Base, p0Avm));
+        }
+
+        // PHASE 2a: globale Konversionsrate f (siehe kandidatenwegRow-Javadoc "ZWEISTUFIGE
+        // ENTSCHEIDUNG"). Erwartungswert (KEINE zusaetzliche Ziehung) ueber ALLE Kandidaten
+        // dieser Phase, damit f nicht selbst schon Stichprobenrauschen in die einzelnen
+        // Konversionsziehungen der Phase 2b traegt.
+        double sumBaseTaken = 0.0, sumAvmTaken = 0.0;
+        for (pendingCandidate candidate : pending) {
+            sumBaseTaken += 1.0 - candidate.p0Base();
+            sumAvmTaken += 1.0 - candidate.p0Avm();
+        }
+        double pBase = pending.isEmpty() ? 0.0 : sumBaseTaken / pending.size();
+        double pAvm = pending.isEmpty() ? 0.0 : sumAvmTaken / pending.size();
+        double f = pBase >= 1.0 ? 0.0 : (pAvm - pBase) / (1.0 - pBase);
+        f = Math.max(0.0, Math.min(1.0, f));
+
+        log.info(String.format(Locale.ROOT,
+                "Nullalternative: Konversionsrate f=%.4f (p_base=%.4f, p_avm=%.4f ueber %d Kandidaten) - Anteil der "
+                        + "in der Basiswelt abgelehnten Kandidaten, der durch die avm-Alternativen \"gerettet\" wird.",
+                f, pBase, pAvm, pending.size()));
+
+        // PHASE 2b: je Kandidat erst die Basisentscheidung (CA/PT, ascNull), danach - nur bei
+        // Ablehnung dort - die Konversionsziehung mit der oben berechneten Rate f.
+        int inserted = 0, insertedViaBase = 0, insertedViaConversion = 0, skippedNullChosen = 0;
+        for (pendingCandidate candidate : pending) {
+            Map<Optional<alternatives>, Double> baseUtilities = filterChoiceSet(candidate.utilities(), baseChoiceSet);
+            Map<Optional<alternatives>, Double> baseProbabilities = behaviourUtilityFunction.softmax(baseUtilities, scaleParameter);
+            double baseDraw = new Random(tripContextBuilder.personSeed(randomSeed, candidate.person().getId(),
+                    "nullAlternativeBaseDraw")).nextDouble();
+            boolean baseChosen = behaviourUtilityFunction.drawFromCumulative(baseProbabilities, baseDraw).isPresent();
+
+            String basisEntscheidung;
+            boolean insert;
+            if (baseChosen) {
+                basisEntscheidung = "WEG";
+                insert = true;
+            } else {
+                basisEntscheidung = "NULLALTERNATIVE";
+                double conversionDraw = new Random(tripContextBuilder.personSeed(randomSeed, candidate.person().getId(),
+                        "nullAlternativeConversionDraw")).nextDouble();
+                insert = conversionDraw < f;
+                if (insert) {
+                    insertedViaConversion++;
+                }
+            }
+
+            if (!insert) {
                 skippedNullChosen++;
-                person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "optedOut");
-                csvRows.add(new kandidatenwegRow(personId, segment, distanzMeter, zweck, draw, p0, "NULLALTERNATIVE", null));
+                candidate.person().getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "optedOut");
+                csvRows.add(new kandidatenwegRow(candidate.personId(), candidate.segment(), candidate.distanzMeter(),
+                        candidate.zweck(), candidate.p0Base(), candidate.p0Avm(), basisEntscheidung,
+                        "NULLALTERNATIVE", null));
                 continue;
             }
+            if (baseChosen) {
+                insertedViaBase++;
+            }
 
-            insertCandidateTrip(plan, boundary.index(), boundaryActivity, boundary.appendAtDayEnd(),
-                    chosen.get().getMatsimMode(), destinationActivity, candidateStart, duration);
-            person.getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "inserted:" + chosen.get().getMatsimMode());
-            csvRows.add(new kandidatenwegRow(personId, segment, distanzMeter, zweck, draw, p0, "WEG", chosen.get().getMatsimMode()));
+            // Konkreter Modus: sobald feststeht, dass ein Weg stattfindet (per Basisentscheidung
+            // ODER per Konversion), zaehlt fuer die MODUSWAHL die volle avm-Alternativenmenge -
+            // die Person lebt in der avm-Welt und waehlt unter deren tatsaechlich verfuegbaren
+            // Alternativen, selbst wenn die Basisentscheidung schon (mit CA oder PT) "WEG" war.
+            Map<alternatives, Double> realAlternatives = new LinkedHashMap<>();
+            for (Map.Entry<Optional<alternatives>, Double> entry : candidate.utilities().entrySet()) {
+                entry.getKey().ifPresent(alt -> realAlternatives.put(alt, entry.getValue()));
+            }
+            Map<alternatives, Double> modeProbabilities = behaviourUtilityFunction.softmax(realAlternatives, scaleParameter);
+            double modeDraw = new Random(tripContextBuilder.personSeed(randomSeed, candidate.person().getId(),
+                    "nullAlternativeAvmModeDraw")).nextDouble();
+            alternatives chosenMode = behaviourUtilityFunction.drawFromCumulative(modeProbabilities, modeDraw);
+
+            insertCandidateTrip(candidate.person().getSelectedPlan(), candidate.boundary().index(),
+                    candidate.boundary().activity(), candidate.boundary().appendAtDayEnd(), chosenMode.getMatsimMode(),
+                    candidate.destinationActivity(), candidate.boundary().candidateStart(), candidate.duration());
+            candidate.person().getAttributes().putAttribute(OUTCOME_ATTRIBUTE, "inserted:" + chosenMode.getMatsimMode());
+            csvRows.add(new kandidatenwegRow(candidate.personId(), candidate.segment(), candidate.distanzMeter(),
+                    candidate.zweck(), candidate.p0Base(), candidate.p0Avm(), basisEntscheidung, "WEG",
+                    chosenMode.getMatsimMode()));
             inserted++;
         }
 
-        log.info(String.format(
-                "Nullalternative: %d/%d Agenten mit Kandidatenweg eingefuegt "
-                        + "(nicht in der Stichprobe (kandidatenwegAgentAnteil=%.4f): %d, Nullalternative gewaehlt: %d, "
-                        + "kein freier Zeitpunkt (Arbeit/Bildung): %d, keine Vorlage: %d, kein Modus verfuegbar/routbar: %d).",
-                inserted, total, agentAnteil, skippedNotSampled, skippedNullChosen, skippedNoFreeSlot, skippedNoTemplate,
-                skippedNoModeAvailable));
+        log.info(String.format(Locale.ROOT,
+                "Nullalternative: %d/%d Agenten mit Kandidatenweg eingefuegt (direkt per Basisentscheidung: %d, "
+                        + "per Konversion mit f=%.4f zusaetzlich gerettet: %d; nicht in der Stichprobe "
+                        + "(kandidatenwegAgentAnteil=%.4f): %d, Nullalternative (Basis+Konversion) gewaehlt: %d, "
+                        + "kein freier Zeitpunkt (Arbeit/Bildung): %d, keine Vorlage: %d, kein Modus verfuegbar/"
+                        + "routbar: %d).",
+                inserted, total, insertedViaBase, f, insertedViaConversion, agentAnteil, skippedNotSampled,
+                skippedNullChosen, skippedNoFreeSlot, skippedNoTemplate, skippedNoModeAvailable));
 
         writeKandidatenwegeCsv(csvRows);
         writeLogsumCsv(logsumRows);
+    }
+
+    /** Zwischenergebnis von Phase 1 (siehe notifyStartup) fuer einen Kandidaten der Stichprobe. */
+    private record pendingCandidate(Person person, String personId, String segment, double distanzMeter,
+            String zweck, insertionPoint boundary, Activity destinationActivity, double duration,
+            Map<Optional<alternatives>, Double> utilities, double p0Base, double p0Avm) {
+    }
+
+    /** utilities auf choiceSet (plus Nullalternative) einschraenken - Hilfsmethode fuer notifyStartup. */
+    private static Map<Optional<alternatives>, Double> filterChoiceSet(
+            Map<Optional<alternatives>, Double> utilities, Set<alternatives> choiceSet) {
+        Map<Optional<alternatives>, Double> filtered = new LinkedHashMap<>();
+        for (Map.Entry<Optional<alternatives>, Double> entry : utilities.entrySet()) {
+            if (entry.getKey().isEmpty() || choiceSet.contains(entry.getKey().get())) {
+                filtered.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return filtered;
+    }
+
+    /**
+     * P(Nullalternative) innerhalb von choiceSet - 1.0, wenn choiceSet fuer diesen Kandidaten
+     * keine einzige routbare/verfuegbare Alternative enthaelt (dann bliebe sonst nur die
+     * Nullalternative selbst im gefilterten Choice-Set, softmax darauf ist trivial 1.0, aber ohne
+     * die triviale Rechnung extra anzustossen).
+     */
+    private static double extractP0(Map<Optional<alternatives>, Double> utilities, Set<alternatives> choiceSet,
+            double scaleParameter) {
+        Map<Optional<alternatives>, Double> filtered = filterChoiceSet(utilities, choiceSet);
+        if (filtered.size() == 1) {
+            return 1.0;
+        }
+        return behaviourUtilityFunction.softmax(filtered, scaleParameter).get(Optional.<alternatives>empty());
     }
 
     /**
@@ -653,14 +784,15 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             Path csvPath = directory.resolve("kandidatenwege.csv");
 
             StringBuilder sb = new StringBuilder();
-            sb.append("personId;segment;distanz;zweck;u;p0;entscheidung;modus\n");
+            sb.append("personId;segment;distanz;zweck;p0Base;p0Avm;basisEntscheidung;entscheidung;modus\n");
             for (kandidatenwegRow row : rows) {
                 sb.append(row.personId()).append(';')
                         .append(row.segment()).append(';')
                         .append(row.distanzMeter() == null ? "" : String.format(Locale.ROOT, "%.3f", row.distanzMeter())).append(';')
                         .append(row.zweck() == null ? "" : row.zweck()).append(';')
-                        .append(row.u() == null ? "" : String.format(Locale.ROOT, "%.6f", row.u())).append(';')
-                        .append(row.p0() == null ? "" : String.format(Locale.ROOT, "%.6f", row.p0())).append(';')
+                        .append(row.p0Base() == null ? "" : String.format(Locale.ROOT, "%.6f", row.p0Base())).append(';')
+                        .append(row.p0Avm() == null ? "" : String.format(Locale.ROOT, "%.6f", row.p0Avm())).append(';')
+                        .append(row.basisEntscheidung() == null ? "" : row.basisEntscheidung()).append(';')
                         .append(row.entscheidung()).append(';')
                         .append(row.modus() == null ? "" : row.modus())
                         .append('\n');
