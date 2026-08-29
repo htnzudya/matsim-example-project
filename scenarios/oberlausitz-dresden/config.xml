@@ -7,7 +7,7 @@
 	</module>
 
 	<module name="controller">
-		<param name="lastIteration" value="700"/>
+		<param name="lastIteration" value="30"/>
 		<param name="overwriteFiles" value="failIfDirectoryExists"/>
 		<param name="runId" value="oberlausitz-dresden-mini"/>
 		<param name="outputDirectory" value="./output/output-oberlausitz-dresden-mini"/>
@@ -61,7 +61,7 @@
 	     run-oberlausitz-dresden.sh-Kommentar). -->
 	<module name="plans">
 		<param name="inputPlansFile"
-		       value="https://svn.vsp.tu-berlin.de/repos/public-svn/matsim/scenarios/countries/de/oberlausitz-dresden/oberlausitz-dresden-v2025.0/input/oberlausitz-dresden-v2025.0-25pct.plans-initial.xml.gz"/>
+		       value="https://svn.vsp.tu-berlin.de/repos/public-svn/matsim/scenarios/countries/de/oberlausitz-dresden/oberlausitz-dresden-v2025.0/input/oberlausitz-dresden-v2025.0-10pct.plans-initial.xml.gz"/>
 		<param name="removingUnnecessaryPlanAttributes" value="true"/>
 	</module>
 
@@ -244,8 +244,8 @@
 
 	<module name="qsim">
 		<param name="endTime" value="36:00:00"/>
-		<param name="flowCapacityFactor" value="0.25"/>
-		<param name="storageCapacityFactor" value="0.25"/>
+		<param name="flowCapacityFactor" value="0.1"/>
+		<param name="storageCapacityFactor" value="0.1"/>
 		<param name="mainMode" value="car,longDistanceFreight,bike"/>
 		<param name="numberOfThreads" value="6"/>
 		<param name="startTime" value="00:00:00"/>
