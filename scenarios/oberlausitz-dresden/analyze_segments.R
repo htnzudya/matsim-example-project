@@ -81,8 +81,18 @@ palette_modes <- hcl.colors(length(modes), palette = "Dark 3")
 modal_split_path <- file.path(output_dir, paste0(prefix, "modal_split.png"))
 png(modal_split_path, width = 1600, height = 1000, res = 150)
 op <- par(mar = c(10, 4, 4, 12), xpd = TRUE)
-barplot(share_matrix, col = palette_modes, las = 2, ylab = "Anteil an Wegen",
-        main = "Modal Split je Segment", border = NA)
+bp <- barplot(share_matrix, col = palette_modes, las = 2, ylab = "Anteil an Wegen",
+              main = "Modal Split je Segment", border = NA)
+# Prozentwerte je Segment/Modus in die gestapelten Balken schreiben - nur ab 3%
+# Anteil (sonst zu wenig Platz im Segment, Beschriftung wird unleserlich).
+for (i in seq_along(segments)) {
+  cum <- cumsum(share_matrix[, i])
+  prev <- c(0, head(cum, -1))
+  mid <- (prev + cum) / 2
+  vals <- share_matrix[, i]
+  labels <- ifelse(vals >= 0.03, paste0(round(vals * 100, 1), "%"), "")
+  text(bp[i], mid, labels, cex = 0.55)
+}
 legend("topright", inset = c(-0.20, 0), legend = modes, fill = palette_modes, bty = "n", title = "Modus")
 par(op)
 invisible(dev.off())
@@ -138,8 +148,18 @@ if (is.na(outcomes_path)) {
   outcomes_png_path <- file.path(output_dir, paste0(prefix, "trip_outcomes.png"))
   png(outcomes_png_path, width = 1600, height = 1000, res = 150)
   op <- par(mar = c(10, 4, 4, 12), xpd = TRUE)
-  barplot(outcome_matrix, col = palette_outcomes, las = 2, ylab = "Anteil der betrachteten Agenten",
-          main = "Zusatzweg-Ergebnis je Segment", border = NA)
+  bp <- barplot(outcome_matrix, col = palette_outcomes, las = 2, ylab = "Anteil der betrachteten Agenten",
+                main = "Zusatzweg-Ergebnis je Segment", border = NA)
+  # Prozentwerte je Segment/Ergebnis in die gestapelten Balken schreiben - nur ab 3%
+  # Anteil (sonst zu wenig Platz im Segment, Beschriftung wird unleserlich).
+  for (i in seq_len(ncol(outcome_matrix))) {
+    cum <- cumsum(outcome_matrix[, i])
+    prev <- c(0, head(cum, -1))
+    mid <- (prev + cum) / 2
+    vals <- outcome_matrix[, i]
+    labels <- ifelse(vals >= 0.03, paste0(round(vals * 100, 1), "%"), "")
+    text(bp[i], mid, labels, cex = 0.55)
+  }
   legend("topright", inset = c(-0.20, 0), legend = outcome_types, fill = palette_outcomes, bty = "n", title = "Ergebnis")
   par(op)
   invisible(dev.off())
