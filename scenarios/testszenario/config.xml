@@ -365,7 +365,7 @@
             <param name="betaCostNiedrigSd" value="0.05"/>
             <param name="betaCostHoch" value="-0.561"/>
             <param name="betaCostHochSd" value="0.05"/>
-            <param name="costPerKm" value="0.38"/>
+            <param name="costPerKm" value="0.14"/>
             <param name="costPerKmWithTicket" value="-1"/>
             <param name="deltaByPreviousMode" value="CA=0,AV=0,PT=0,PSAV=0.831,SSAV=0"/>
             <param name="gamma" value="techAffinity=0.4,environmentalAwareness=0,sharingWillingness=0.2,drivingEnjoyment=-0.2,perceivedUsefulness=0.2,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0.4"/>
@@ -386,7 +386,7 @@
             <param name="betaCostNiedrigSd" value="0.05"/>
             <param name="betaCostHoch" value="-0.561"/>
             <param name="betaCostHochSd" value="0.05"/>
-            <param name="costPerKm" value="0.5"/>
+            <param name="costPerKm" value="0.19"/>
             <param name="costPerKmWithTicket" value="-1"/>
             <param name="deltaByPreviousMode" value="CA=0,AV=0,PT=0,PSAV=0,SSAV=0.831"/>
             <param name="gamma" value="techAffinity=0.2,environmentalAwareness=0.1,sharingWillingness=0.4,drivingEnjoyment=-0.2,perceivedUsefulness=0.4,perceivedEaseOfUse=0.1,trust=0.4,safetyPerception=0.4,perceivedRisk=-0.2,perceivedBehaviouralControl=0.4,socialNorm=0.4"/>

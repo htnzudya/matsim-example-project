@@ -29,7 +29,9 @@ import org.matsim.api.core.v01.population.Plan;
 import org.matsim.api.core.v01.population.PlanElement;
 import org.matsim.api.core.v01.population.Population;
 import org.matsim.core.config.Config;
+import org.matsim.core.controler.events.IterationEndsEvent;
 import org.matsim.core.controler.events.StartupEvent;
+import org.matsim.core.controler.listener.IterationEndsListener;
 import org.matsim.core.controler.listener.StartupListener;
 import org.matsim.core.population.PopulationUtils;
 import org.matsim.core.router.TripRouter;
@@ -177,7 +179,7 @@ import com.google.inject.Inject;
  *    Umstiegen/Interaktionsaktivitaeten) an beliebiger Stelle in den Plan zu
  *    spleissen.
  */
-public final class behaviourCandidateTripInserter implements StartupListener {
+public final class behaviourCandidateTripInserter implements StartupListener, IterationEndsListener {
 
     private static final Logger log = LogManager.getLogger(behaviourCandidateTripInserter.class);
 
@@ -759,7 +761,106 @@ public final class behaviourCandidateTripInserter implements StartupListener {
                 skippedNoTemplate, skippedNoModeAvailable));
 
         writeKandidatenwegeCsv(csvRows);
-        writeLogsumCsv(logsumRows);
+        writeLogsumCsv(logsumRows, "logsum.csv");
+    }
+
+    /**
+     * Auftraggeber-Anfrage 2026-08-30: ein "ganz normaler" Logsum, aber ueber ALLE Wege der
+     * gesamten Population (nicht nur die Kandidatenweg-Stichprobe wie logsum.csv) - fuer reine
+     * Auswertungszwecke, deshalb bewusst NICHT vor Iteration 0 (notifyStartup, auf den
+     * unveraenderten Ausgangsplaenen), sondern EINMALIG am Ende der LETZTEN Iteration
+     * (event.isLastIteration()), auf den zu diesem Zeitpunkt bereits durch das laufende DCM
+     * konvergierten/optimierten Plaenen - das ist der Logsum, der tatsaechlich zur finalen
+     * Verkehrsmittelwahl der Population gehoert, nicht zur Ausgangslage.
+     *
+     * ACHTUNG Laufzeit: routet JEDEN bestehenden Weg JEDER Person unter ALLEN in
+     * AVM_CHOICE_SET verfuegbaren Alternativen (CA/AV/PT/PSAV/SSAV/BIKE/WALK/RIDE, inkl.
+     * PSAV/SSAV-DRT-Routing) - bei einer 25pct-Population mit mehreren hunderttausend Wegen
+     * kann das spuerbar Zeit kosten (vergleichbar mit calibrateAscNull() Phase 1, dort aber
+     * nur fuer die Basiswelt CA/PT/BIKE/WALK/RIDE, ohne PSAV/SSAV). Laeuft trotzdem immer mit,
+     * wenn dieser Listener aktiv ist (kein eigener Config-Schalter) - fuer reine
+     * Analytik-Auswertungen nach dem letzten von ohnehin durchlaufenen Iterationen ist der
+     * einmalige Zusatzaufwand am Ende des Laufs vertretbar, im Gegensatz zu einer Wiederholung
+     * je Iteration.
+     */
+    @Override
+    public void notifyIterationEnds(IterationEndsEvent event) {
+        if (cfg.getAscNullKalibrierungAktiv() || !event.isLastIteration()) {
+            return;
+        }
+        writeAllTripsLogsum(event.getIteration());
+    }
+
+    private void writeAllTripsLogsum(int iteration) {
+        String segmentAttribute = cfg.getSegmentAttribute();
+        long randomSeed = cfg.getRandomSeed();
+        double scaleParameter = cfg.getScaleParameter();
+        Map<alternatives, modeParams> modeParamsByAlternative = cfg.buildModeParams();
+        Map<String, agentProfile> segmentsById = cfg.buildSegments();
+
+        List<logsumRow> rows = new ArrayList<>();
+        int totalTrips = 0;
+        for (Person person : population.getPersons().values()) {
+            String personId = person.getId().toString();
+            Object segmentValue = person.getAttributes().getAttribute(segmentAttribute);
+            String segment = segmentValue == null ? "unbekannt" : segmentValue.toString();
+
+            agentProfile profile = resolveProfile(person, segmentAttribute, segmentsById)
+                    .draw(new Random(tripContextBuilder.personSeed(randomSeed, person.getId(), "profile")));
+            Collection<String> availableModes = modeAvailability.getAvailableModes(person, List.of());
+
+            List<TripStructureUtils.Trip> trips = TripStructureUtils.getTrips(person.getSelectedPlan());
+            for (int tripIndex = 0; tripIndex < trips.size(); tripIndex++) {
+                TripStructureUtils.Trip trip = trips.get(tripIndex);
+                Activity originActivity = trip.getOriginActivity();
+                Activity destinationActivity = trip.getDestinationActivity();
+                if (originActivity.getEndTime().isUndefined()) {
+                    continue; // kein verlaesslicher Abfahrtszeitpunkt - siehe collectTemplateProviders-Javadoc
+                }
+                double departureTime = originActivity.getEndTime().seconds();
+                Facility originFacility = FacilitiesUtils.toFacility(originActivity, facilities);
+                Facility destinationFacility = FacilitiesUtils.toFacility(destinationActivity, facilities);
+
+                Map<Optional<alternatives>, Double> utilities = new LinkedHashMap<>();
+                // Keine Nullalternative hier - reine Logsum-Diagnose ueber real stattfindende
+                // Wege, keine "kein Weg"-Option (der Weg findet nachweislich bereits statt).
+                for (alternatives alternative : modeParamsByAlternative.keySet()) {
+                    if (!AVM_CHOICE_SET.contains(alternative) || !availableModes.contains(alternative.getMatsimMode())) {
+                        continue;
+                    }
+                    if (alternative == alternatives.CA || alternative == alternatives.AV
+                            || alternative == alternatives.BIKE) {
+                        ensureVehicleId(person, alternative.getMatsimMode());
+                    }
+                    modeParams meanParams = modeParamsByAlternative.get(alternative);
+                    modeParams params = meanParams.draw(
+                            new Random(tripContextBuilder.personSeed(randomSeed, person.getId(),
+                                    "allTripsLogsum" + tripIndex + alternative.name())),
+                            cfg.resolveIncomeTier(person));
+                    List<? extends PlanElement> routed;
+                    try {
+                        routed = tripRouter.calcRoute(alternative.getMatsimMode(), originFacility, destinationFacility,
+                                departureTime, person, new AttributesImpl());
+                    } catch (RuntimeException e) {
+                        continue;
+                    }
+                    double costPerKm = params.effectiveCostPerKm(cfg.hasTicket(person));
+                    TripContext tripContext = tripContextBuilder.buildTripContext(
+                            timeInterpretation, departureTime, routed, costPerKm);
+                    utilities.put(Optional.of(alternative), utilityFunction.utility(profile, params, tripContext, null));
+                }
+                if (utilities.isEmpty()) {
+                    continue; // kein Modus verfuegbar/routbar - kein Logsum berechenbar
+                }
+                rows.add(buildLogsumRow(personId, segment, utilities));
+                totalTrips++;
+            }
+        }
+
+        log.info(String.format(Locale.ROOT,
+                "Logsum-Alle-Wege: %d Wege der gesamten Population geroutet und bewertet (letzte Iteration %d).",
+                totalTrips, iteration));
+        writeLogsumCsv(rows, "logsum_alle_wege.csv");
     }
 
     /** Zwischenergebnis von Phase 1 (siehe notifyStartup) fuer einen Kandidaten der Stichprobe. */
@@ -866,12 +967,11 @@ public final class behaviourCandidateTripInserter implements StartupListener {
         }
         double lambdaAvm = utilityFunction.logsum(realUtilities);
 
-        // "Heutige Welt" = nur CA/PT (inducedDemandModel.BASELINE_CHOICE_SET im
-        // induzierte-Nachfrage-Branch - die Klasse existiert in diesem Branch nicht
-        // mehr, daher hier inline statt einer neuen Abhaengigkeit), dieselbe Menge
-        // wie buildWorldChoiceSet("base").
+        // "Heutige Welt" = BASE_CHOICE_SET (Korrektur 2026-08-30: vorher hier inline nur
+        // CA/PT, inkonsistent mit der zwischenzeitlich auf CA/PT/BIKE/WALK/RIDE erweiterten
+        // Basiswelt-Definition, siehe BASE_CHOICE_SET-Javadoc).
         Map<alternatives, Double> baselineUtilities = new EnumMap<>(alternatives.class);
-        for (alternatives baselineAlternative : EnumSet.of(alternatives.CA, alternatives.PT)) {
+        for (alternatives baselineAlternative : BASE_CHOICE_SET) {
             Double v = realUtilities.get(baselineAlternative);
             if (v != null) {
                 baselineUtilities.put(baselineAlternative, v);
@@ -884,19 +984,22 @@ public final class behaviourCandidateTripInserter implements StartupListener {
     }
 
     /**
-     * Schreibt logsum.csv (Diagnose-Output, siehe logsumRow-Javadoc) ins
-     * outputDirectory: eine Zeile je Person, die die Nutzenberechnung
+     * Schreibt eine Logsum-Diagnose-CSV (siehe logsumRow-Javadoc) ins
+     * outputDirectory: eine Zeile je Person/Weg, die die Nutzenberechnung
      * erreicht hat (nicht bei skipped:noTemplate/skipped:noFreeSlot - dort
      * gibt es kein geroutetes Choice-Set, ueber das ein Logsum sinnvoll
      * waere). V_&lt;alternative&gt;-Spalten in fester Reihenfolge (alternatives-
-     * Enum-Deklaration: CA, AV, PT, PSAV, SSAV), leer wenn fuer diese Person
-     * nicht verfuegbar/routbar.
+     * Enum-Deklaration: CA, AV, PT, PSAV, SSAV, BIKE, WALK, RIDE), leer wenn
+     * fuer diese Person/diesen Weg nicht verfuegbar/routbar. fileName
+     * unterscheidet die Kandidatenweg-Stichprobe (logsum.csv) von der
+     * Alle-Wege-Diagnose (logsum_alle_wege.csv, siehe
+     * writeAllTripsLogsum-Javadoc).
      */
-    private void writeLogsumCsv(List<logsumRow> rows) {
+    private void writeLogsumCsv(List<logsumRow> rows, String fileName) {
         try {
             Path directory = Path.of(config.controller().getOutputDirectory());
             Files.createDirectories(directory);
-            Path csvPath = directory.resolve("logsum.csv");
+            Path csvPath = directory.resolve(fileName);
 
             StringBuilder sb = new StringBuilder();
             sb.append("personId;segment;lambdaBase;lambdaAvm;deltaLogsum");
@@ -919,7 +1022,7 @@ public final class behaviourCandidateTripInserter implements StartupListener {
             Files.writeString(csvPath, sb.toString(), StandardCharsets.UTF_8);
             log.info("Nullalternative: " + rows.size() + " Zeilen nach " + csvPath + " geschrieben.");
         } catch (IOException e) {
-            throw new UncheckedIOException("logsum.csv konnte nicht geschrieben werden.", e);
+            throw new UncheckedIOException(fileName + " konnte nicht geschrieben werden.", e);
         }
     }
 

@@ -130,6 +130,25 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     private double kandidatenwegAgentAnteil = 1.0;
 
     /**
+     * Iteration, an der die Kandidatenweg-Einfuege/Ablehn-Entscheidung EIN ZWEITES MAL
+     * getroffen wird (Auftraggeber-Feedback 2026-08-30: die urspruengliche, einmalige
+     * Entscheidung in notifyStartup nutzt Nutzenwerte aus dem NOCH UNGESTAUTEN Netz/nicht
+     * eingeschwungenen DRT-Flotten - bis zur Konvergenz koennen sich Reisezeiten/Wartezeiten
+     * spuerbar veraendern). -1 (Default) deaktiviert den zweiten Durchlauf komplett -
+     * bisheriges Verhalten (nur notifyStartup).
+     *
+     * Bei einem Wert &gt;= 0 werden am Ende dieser Iteration (notifyIterationEnds) fuer ALLE
+     * Kandidaten der Stichprobe die Basiswelt-/avm-Nutzenwerte anhand der dann tatsaechlich
+     * beobachteten (konvergierteren) Reisezeiten neu geroutet, daraus eine neue
+     * Konversionsrate f_neu berechnet - UND jeder Kandidat mit demselben personSeed-Zug wie
+     * beim ersten Durchlauf gegen f_neu neu bewertet: steigt f, werden zusaetzliche, zuvor
+     * abgelehnte Kandidaten eingefuegt; sinkt f, werden zuvor eingefuegte Kandidatenwege
+     * wieder ENTFERNT (siehe behaviourCandidateTripInserter.runSecondPass-Javadoc). Nur EIN
+     * zusaetzlicher Durchlauf (kein wiederholter Mechanismus ueber mehrere Iterationen).
+     */
+    private int kandidatenwegZweitePassIteration = -1;
+
+    /**
      * Schwellenwerte fuer die Zuordnung der hhIncome-Klasse (1-10, VSP-
      * Population, siehe incomeTier-Klassen-Javadoc) auf NIEDRIG/MITTEL/HOCH:
      * hhIncome &lt;= einkommenSchwelleNiedrigMax -&gt; NIEDRIG, hhIncome &gt;=
@@ -384,6 +403,17 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     @StringSetter("kandidatenwegAgentAnteil")
     public void setKandidatenwegAgentAnteil(double kandidatenwegAgentAnteil) {
         this.kandidatenwegAgentAnteil = kandidatenwegAgentAnteil;
+    }
+
+    /** Siehe kandidatenwegZweitePassIteration-Feld-Javadoc. */
+    @StringGetter("kandidatenwegZweitePassIteration")
+    public int getKandidatenwegZweitePassIteration() {
+        return kandidatenwegZweitePassIteration;
+    }
+
+    @StringSetter("kandidatenwegZweitePassIteration")
+    public void setKandidatenwegZweitePassIteration(int kandidatenwegZweitePassIteration) {
+        this.kandidatenwegZweitePassIteration = kandidatenwegZweitePassIteration;
     }
 
     /** Siehe einkommenSchwelleNiedrigMax-Feld-Javadoc. */
