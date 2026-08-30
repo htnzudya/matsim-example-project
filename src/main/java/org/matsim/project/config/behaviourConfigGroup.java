@@ -93,6 +93,18 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     private boolean baselineAscKalibrierungAktiv = false;
 
     /**
+     * Schaltet den behaviourGammaSensitivityAnalyzer-Diagnoselauf ein (Auftraggeber-Anfrage
+     * 2026-08-30: pruefen, wieviel Prozent des Nutzens V-ASC bei den Alternativen mit asc=0
+     * (CA/AV/PSAV/SSAV) aktuell auf LOS-Terme (beta_inVehicleTime/waitTime/cost) vs. latente
+     * Terme (gamma*Konstrukte + Habit) entfallen - GRUNDLAGE fuer eine anschliessende
+     * Gamma-Neukalibrierung auf eine 50/50-Aufteilung). Beendet den Prozess nach dem
+     * Schreiben des Ergebnisses (System.exit), wie ascNullKalibrierungAktiv/
+     * baselineAscKalibrierungAktiv - NIEMALS mehrere dieser Schalter gleichzeitig auf true
+     * setzen. Default false: normaler Lauf.
+     */
+    private boolean gammaSensitivitaetsAnalyseAktiv = false;
+
+    /**
      * Ziel-Anteil der Agenten mit entscheidung==WEG fuer die ascNull-
      * Kalibrierung (Schritt 9), siehe ascNullKalibrierungAktiv-Javadoc.
      * Default 0.25: aktualisierter Auftraggeber-Wert (25% unterdrueckte
@@ -370,6 +382,17 @@ public final class behaviourConfigGroup extends ReflectiveConfigGroup {
     @StringSetter("baselineAscKalibrierungAktiv")
     public void setBaselineAscKalibrierungAktiv(boolean baselineAscKalibrierungAktiv) {
         this.baselineAscKalibrierungAktiv = baselineAscKalibrierungAktiv;
+    }
+
+    /** Siehe gammaSensitivitaetsAnalyseAktiv-Feld-Javadoc. */
+    @StringGetter("gammaSensitivitaetsAnalyseAktiv")
+    public boolean getGammaSensitivitaetsAnalyseAktiv() {
+        return gammaSensitivitaetsAnalyseAktiv;
+    }
+
+    @StringSetter("gammaSensitivitaetsAnalyseAktiv")
+    public void setGammaSensitivitaetsAnalyseAktiv(boolean gammaSensitivitaetsAnalyseAktiv) {
+        this.gammaSensitivitaetsAnalyseAktiv = gammaSensitivitaetsAnalyseAktiv;
     }
 
     /** Siehe ascNullKalibrierungZielanteil-Feld-Javadoc. */

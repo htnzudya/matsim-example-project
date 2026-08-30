@@ -92,6 +92,34 @@ public final class behaviourUtilityFunction {
     }
 
     /**
+     * Zerlegung von V(i,j) - ASC_j in LOS- (beta_inVehicleTime/waitTime/cost) und
+     * latente (delta/Habit + gamma*Konstrukte) Komponenten. NICHT fuer den laufenden
+     * DCM verwendet (der bleibt bei utility()), sondern reine Diagnose fuer die
+     * Sensitivitaetsanalyse "wie viel Prozent des Nutzens machen LOS- bzw. latente
+     * Faktoren aus" (Auftraggeber-Anfrage 2026-08-30). ASC bewusst ausgeschlossen -
+     * die Analyse gilt ohnehin nur fuer Alternativen mit asc=0.
+     */
+    public record UtilityComponents(double vLos, double vLatent) {
+    }
+
+    public UtilityComponents utilityComponents(agentProfile profile, modeParams params, TripContext trip,
+            alternatives previousMode) {
+        double vLos = params.getBetaInVehicleTime() * trip.inVehicleTimeHours()
+                + params.getBetaWaitTime() * trip.waitTimeHours()
+                + params.getBetaCost() * trip.costEuro();
+
+        double vLatent = 0.0;
+        if (previousMode != null) {
+            vLatent += params.getDelta(previousMode);
+        }
+        for (Map.Entry<String, Double> entry : params.getGamma().entrySet()) {
+            vLatent += entry.getValue() * profile.get(entry.getKey());
+        }
+
+        return new UtilityComponents(vLos, vLatent);
+    }
+
+    /**
      * Systematischer Nutzen aller verfuegbaren Alternativen.
      *
      * @param available Alternativen, die dem Agenten ueberhaupt offenstehen

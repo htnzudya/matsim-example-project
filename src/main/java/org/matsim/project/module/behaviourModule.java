@@ -620,5 +620,10 @@ public final class behaviourModule extends AbstractModule {
         // verhaltensmodell.baselineAscKalibrierungAktiv=true gesetzt ist) - siehe
         // behaviourBaselineAscCalibrator-Klassen-Javadoc.
         addControllerListenerBinding().to(behaviourBaselineAscCalibrator.class);
+
+        // Gamma-Sensitivitaetsanalyse (nur aktiv, wenn
+        // verhaltensmodell.gammaSensitivitaetsAnalyseAktiv=true gesetzt ist) - siehe
+        // behaviourGammaSensitivityAnalyzer-Klassen-Javadoc.
+        addControllerListenerBinding().to(behaviourGammaSensitivityAnalyzer.class);
     }
 }
