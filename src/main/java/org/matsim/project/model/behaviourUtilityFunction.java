@@ -99,7 +99,10 @@ public final class behaviourUtilityFunction {
      * Faktoren aus" (Auftraggeber-Anfrage 2026-08-30). ASC bewusst ausgeschlossen -
      * die Analyse gilt ohnehin nur fuer Alternativen mit asc=0.
      */
-    public record UtilityComponents(double vLos, double vLatent) {
+    public record UtilityComponents(double vLos, double vHabit, double vGammaConstructs) {
+        public double vLatent() {
+            return vHabit + vGammaConstructs;
+        }
     }
 
     public UtilityComponents utilityComponents(agentProfile profile, modeParams params, TripContext trip,
@@ -108,15 +111,14 @@ public final class behaviourUtilityFunction {
                 + params.getBetaWaitTime() * trip.waitTimeHours()
                 + params.getBetaCost() * trip.costEuro();
 
-        double vLatent = 0.0;
-        if (previousMode != null) {
-            vLatent += params.getDelta(previousMode);
-        }
+        double vHabit = previousMode != null ? params.getDelta(previousMode) : 0.0;
+
+        double vGammaConstructs = 0.0;
         for (Map.Entry<String, Double> entry : params.getGamma().entrySet()) {
-            vLatent += entry.getValue() * profile.get(entry.getKey());
+            vGammaConstructs += entry.getValue() * profile.get(entry.getKey());
         }
 
-        return new UtilityComponents(vLos, vLatent);
+        return new UtilityComponents(vLos, vHabit, vGammaConstructs);
     }
 
     /**

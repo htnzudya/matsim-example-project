@@ -114,7 +114,10 @@ public final class behaviourGammaSensitivityAnalyzer implements StartupListener 
     }
 
     /** Sammelt V_LOS/V_Latent je bewerteter Alternative - fuer die SD-Berechnung in Phase 2. */
-    private record sample(alternatives mode, double vLos, double vLatent) {
+    private record sample(alternatives mode, double vLos, double vHabit, double vGammaConstructs) {
+        double vLatent() {
+            return vHabit + vGammaConstructs;
+        }
     }
 
     private void analyze() {
@@ -180,7 +183,8 @@ public final class behaviourGammaSensitivityAnalyzer implements StartupListener 
                             timeInterpretation, departureTime, routed, costPerKm);
                     UtilityComponents components = utilityFunction.utilityComponents(profile, params, tripContext,
                             observedMode);
-                    samples.add(new sample(alternative, components.vLos(), components.vLatent()));
+                    samples.add(new sample(alternative, components.vLos(), components.vHabit(),
+                            components.vGammaConstructs()));
                 }
             }
         }
@@ -203,16 +207,20 @@ public final class behaviourGammaSensitivityAnalyzer implements StartupListener 
             Path csvPath = directory.resolve("gamma_sensitivitaet_baseline.csv");
 
             StringBuilder sb = new StringBuilder();
-            sb.append("mode;n;meanVLos;sdVLos;meanVLatent;sdVLatent;losAnteil;latentAnteil\n");
+            sb.append("mode;n;sdVLos;sdVHabit;sdVGamma;sdVLatent;losAnteil;latentAnteil\n");
             log.info(String.format(Locale.ROOT, "%-6s %8s %10s %10s %10s %10s %10s %10s",
-                    "mode", "n", "meanVLos", "sdVLos", "meanVLat", "sdVLat", "losAnteil", "latAnteil"));
+                    "mode", "n", "sdVLos", "sdVHabit", "sdVGamma", "sdVLat", "losAnteil", "latAnteil"));
 
             for (alternatives mode : ANALYSIS_MODES) {
                 List<Double> vLosValues = new ArrayList<>();
+                List<Double> vHabitValues = new ArrayList<>();
+                List<Double> vGammaValues = new ArrayList<>();
                 List<Double> vLatentValues = new ArrayList<>();
                 for (sample s : samples) {
                     if (s.mode() == mode) {
                         vLosValues.add(s.vLos());
+                        vHabitValues.add(s.vHabit());
+                        vGammaValues.add(s.vGammaConstructs());
                         vLatentValues.add(s.vLatent());
                     }
                 }
@@ -221,26 +229,26 @@ public final class behaviourGammaSensitivityAnalyzer implements StartupListener 
                             + " - fehlt in der CSV.");
                     continue;
                 }
-                double meanLos = mean(vLosValues);
-                double sdLos = standardDeviation(vLosValues, meanLos);
-                double meanLatent = mean(vLatentValues);
-                double sdLatent = standardDeviation(vLatentValues, meanLatent);
+                double sdLos = standardDeviation(vLosValues, mean(vLosValues));
+                double sdHabit = standardDeviation(vHabitValues, mean(vHabitValues));
+                double sdGamma = standardDeviation(vGammaValues, mean(vGammaValues));
+                double sdLatent = standardDeviation(vLatentValues, mean(vLatentValues));
                 double sdSum = sdLos + sdLatent;
                 double losAnteil = sdSum > 0 ? sdLos / sdSum : Double.NaN;
                 double latentAnteil = sdSum > 0 ? sdLatent / sdSum : Double.NaN;
 
                 sb.append(mode.name()).append(';')
                         .append(vLosValues.size()).append(';')
-                        .append(String.format(Locale.ROOT, "%.6f", meanLos)).append(';')
                         .append(String.format(Locale.ROOT, "%.6f", sdLos)).append(';')
-                        .append(String.format(Locale.ROOT, "%.6f", meanLatent)).append(';')
+                        .append(String.format(Locale.ROOT, "%.6f", sdHabit)).append(';')
+                        .append(String.format(Locale.ROOT, "%.6f", sdGamma)).append(';')
                         .append(String.format(Locale.ROOT, "%.6f", sdLatent)).append(';')
                         .append(String.format(Locale.ROOT, "%.6f", losAnteil)).append(';')
                         .append(String.format(Locale.ROOT, "%.6f", latentAnteil))
                         .append('\n');
 
                 log.info(String.format(Locale.ROOT, "%-6s %8d %10.4f %10.4f %10.4f %10.4f %10.4f %10.4f",
-                        mode.name(), vLosValues.size(), meanLos, sdLos, meanLatent, sdLatent, losAnteil, latentAnteil));
+                        mode.name(), vLosValues.size(), sdLos, sdHabit, sdGamma, sdLatent, losAnteil, latentAnteil));
             }
 
             Files.writeString(csvPath, sb.toString(), StandardCharsets.UTF_8);
