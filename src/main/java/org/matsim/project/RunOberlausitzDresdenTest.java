@@ -124,21 +124,26 @@ public class RunOberlausitzDresdenTest extends MATSimApplication {
 
 		config.controller().setOverwriteFileSetting(OverwriteFileSetting.deleteDirectoryIfExists);
 
-		// Schritt 16 (Bugfix/Kalibrierung): 9 Iterationen reichten nicht annaehernd
-		// zur Konvergenz - modestats.csv zeigte den AV-Anteil noch klar steigend
-		// (kein Plateau) und scorestats.csv einen monoton FALLENDEN Durchschnitts-
-		// score ueber alle 9 Iterationen (82.6 -> 65.2). Grund fuer den fallenden
-		// Score: maxAgentPlanMemorySize=1 (kein "beste Alternative merken"), ein
-		// Agent kann durch reines Zufallspech (Gumbel-Rauschen der 20%-
-		// DiscreteModeChoice-Ziehung) in eine schlechtere Alternative rutschen,
-		// ohne dass das je zurueckgedreht wird - kein LOS-getriebenes
-		// Gleichgewicht, sondern ein Drift. Fuer echte Konvergenz muesste
-		// lastIteration deutlich hoeher stehen (bei 1pct-Population kein
-		// Problem: ~3 Min/Iteration nach dem einmaligen ~10-Min-DVRP-Setup,
-		// siehe stopwatch.csv eines Testlaufs) - auf 10 zurueckgestellt
-		// (Auftraggeber-Vorgabe); fuer echte Konvergenz waere noch deutlich
-		// hoeher (z. B. 50, siehe Git-History) noetig.
-		config.controller().setLastIteration(40);
+		// Schritt 16 (Bugfix/Kalibrierung, HISTORISCH): 9 Iterationen reichten nicht
+		// annaehernd zur Konvergenz - modestats.csv zeigte den AV-Anteil noch klar
+		// steigend (kein Plateau) und scorestats.csv einen monoton FALLENDEN
+		// Durchschnittsscore ueber alle 9 Iterationen (82.6 -> 65.2). Grund fuer den
+		// fallenden Score: maxAgentPlanMemorySize=1 (kein "beste Alternative merken"),
+		// ein Agent kann durch reines Zufallspech (Gumbel-Rauschen der 20%-
+		// DiscreteModeChoice-Ziehung) in eine schlechtere Alternative rutschen, ohne
+		// dass das je zurueckgedreht wird - kein LOS-getriebenes Gleichgewicht,
+		// sondern ein Drift. Fuer echte Konvergenz braucht es deutlich mehr
+		// Iterationen (bei 1pct-Population kein Problem: ~3 Min/Iteration nach dem
+		// einmaligen ~10-Min-DVRP-Setup, siehe stopwatch.csv eines Testlaufs).
+		//
+		// KORREKTUR 2026-08-31: hier stand vorher ein hartcodiertes
+		// config.controller().setLastIteration(40) - das ueberschrieb JEDEN
+		// lastIteration-Wert aus config.xml stillschweigend, unabhaengig davon, was
+		// dort konfiguriert war (der zugehoerige Kommentar sprach sogar von einem
+		// voellig anderen Wert, 10 - Beleg, dass die beiden schon auseinandergelaufen
+		// waren). lastIteration wird jetzt NICHT mehr hier gesetzt - config.xml
+		// (controller.lastIteration) ist die alleinige Quelle, wie bei allen anderen
+		// Parametern auch.
 
 		// Oberlausitz/Dresden nutzt bereits "home" als Heimataktivitaet - kein
 		// Override noetig (anders als equil mit "h").
