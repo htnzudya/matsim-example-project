@@ -139,8 +139,8 @@
         <parameterset type="segmentParams">
             <param name="segmentId" value="multioptionaler_urbanist"/>
             <param name="probability" value="0.0259"/>
-            <param name="constructs" value="techAffinity=0.61,environmentalAwareness=0.68,sharingWillingness=5.75,drivingEnjoyment=-0.19,perceivedUsefulness=0.8,perceivedEaseOfUse=0.7,trust=0.75,safetyPerception=0.3,perceivedRisk=-0.6,perceivedBehaviouralControl=0.7,socialNorm=0.8"/>
-            <param name="constructsSd" value="techAffinity=1.11,environmentalAwareness=1.02,sharingWillingness=1.93,drivingEnjoyment=0.95,perceivedUsefulness=1,perceivedEaseOfUse=1,trust=1,safetyPerception=1,perceivedRisk=1,perceivedBehaviouralControl=1,socialNorm=1"/>
+            <param name="constructs" value="techAffinity=0.61,environmentalAwareness=0.68,sharingWillingness=5.75,drivingEnjoyment=-0.19,perceivedUsefulness=0.7,perceivedEaseOfUse=0.7,trust=0.6,safetyPerception=0.5,perceivedRisk=-0.3,perceivedBehaviouralControl=0.7,socialNorm=0.8"/>
+            <param name="constructsSd" value="techAffinity=1.11,environmentalAwareness=1.02,sharingWillingness=1.93,drivingEnjoyment=0.95,perceivedUsefulness=0.9,perceivedEaseOfUse=0.9,trust=0.9,safetyPerception=0.9,perceivedRisk=0.9,perceivedBehaviouralControl=0.9,socialNorm=0.9"/>
             <param name="displayName" value="multioptionaler_urbanist"/>
             <param name="ageMu" value="42.68"/>
             <param name="ageSd" value="11.98"/>
@@ -158,8 +158,8 @@
         <parameterset type="segmentParams">
             <param name="segmentId" value="aktiver_aelterer"/>
             <param name="probability" value="0.2531"/>
-            <param name="constructs" value="techAffinity=-0.42,environmentalAwareness=-0.37,sharingWillingness=-0.16,drivingEnjoyment=0.24,perceivedUsefulness=-0.3,perceivedEaseOfUse=-0.5,trust=-0.3,safetyPerception=0.6,perceivedRisk=0.4,perceivedBehaviouralControl=-0.2,socialNorm=-0.4"/>
-            <param name="constructsSd" value="techAffinity=0.91,environmentalAwareness=0.66,sharingWillingness=0.12,drivingEnjoyment=0.59,perceivedUsefulness=1,perceivedEaseOfUse=1,trust=1,safetyPerception=1,perceivedRisk=1,perceivedBehaviouralControl=1,socialNorm=1"/>
+            <param name="constructs" value="techAffinity=-0.42,environmentalAwareness=-0.37,sharingWillingness=-0.16,drivingEnjoyment=0.24,perceivedUsefulness=-0.5,perceivedEaseOfUse=-0.4,trust=-0.2,safetyPerception=-0.1,perceivedRisk=0.1,perceivedBehaviouralControl=-0.1,socialNorm=-0.1"/>
+            <param name="constructsSd" value="techAffinity=0.91,environmentalAwareness=0.66,sharingWillingness=0.12,drivingEnjoyment=0.59,perceivedUsefulness=0.9,perceivedEaseOfUse=0.9,trust=0.9,safetyPerception=0.9,perceivedRisk=0.9,perceivedBehaviouralControl=0.9,socialNorm=0.9"/>
             <param name="displayName" value="aktiver_aelterer"/>
             <param name="ageMu" value="63.24"/>
             <param name="ageSd" value="12.53"/>
@@ -177,8 +177,8 @@
         <parameterset type="segmentParams">
             <param name="segmentId" value="pragmatischer_urbanist"/>
             <param name="probability" value="0.1886"/>
-            <param name="constructs" value="techAffinity=0.34,environmentalAwareness=0.81,sharingWillingness=-0.11,drivingEnjoyment=-0.13,perceivedUsefulness=0.6,perceivedEaseOfUse=0.4,trust=0.4,safetyPerception=0.2,perceivedRisk=-0.3,perceivedBehaviouralControl=0.5,socialNorm=0.6"/>
-            <param name="constructsSd" value="techAffinity=0.96,environmentalAwareness=1.01,sharingWillingness=0.08,drivingEnjoyment=0.8,perceivedUsefulness=1,perceivedEaseOfUse=1,trust=1,safetyPerception=1,perceivedRisk=1,perceivedBehaviouralControl=1,socialNorm=1"/>
+            <param name="constructs" value="techAffinity=0.34,environmentalAwareness=0.81,sharingWillingness=-0.11,drivingEnjoyment=-0.13,perceivedUsefulness=0,perceivedEaseOfUse=0.4,trust=0.3,safetyPerception=0.3,perceivedRisk=-0.3,perceivedBehaviouralControl=0.5,socialNorm=0.4"/>
+            <param name="constructsSd" value="techAffinity=0.96,environmentalAwareness=1.01,sharingWillingness=0.08,drivingEnjoyment=0.8,perceivedUsefulness=0.9,perceivedEaseOfUse=0.9,trust=0.9,safetyPerception=0.9,perceivedRisk=0.9,perceivedBehaviouralControl=0.9,socialNorm=0.9"/>
             <param name="displayName" value="pragmatischer_urbanist"/>
             <param name="ageMu" value="52.04"/>
             <param name="ageSd" value="15.07"/>
@@ -196,8 +196,8 @@
         <parameterset type="segmentParams">
             <param name="segmentId" value="oepnv_gebundener"/>
             <param name="probability" value="0.0626"/>
-            <param name="constructs" value="techAffinity=-0.02,environmentalAwareness=0.96,sharingWillingness=-0.15,drivingEnjoyment=-2.61,perceivedUsefulness=0.5,perceivedEaseOfUse=0.1,trust=0.2,safetyPerception=0.4,perceivedRisk=0.1,perceivedBehaviouralControl=-0.1,socialNorm=0.4"/>
-            <param name="constructsSd" value="techAffinity=0.97,environmentalAwareness=1.14,sharingWillingness=0.16,drivingEnjoyment=1.23,perceivedUsefulness=1,perceivedEaseOfUse=1,trust=1,safetyPerception=1,perceivedRisk=1,perceivedBehaviouralControl=1,socialNorm=1"/>
+            <param name="constructs" value="techAffinity=-0.02,environmentalAwareness=0.96,sharingWillingness=-0.15,drivingEnjoyment=-2.61,perceivedUsefulness=0.5,perceivedEaseOfUse=0.1,trust=0.1,safetyPerception=0.4,perceivedRisk=-0.3,perceivedBehaviouralControl=0,socialNorm=0"/>
+            <param name="constructsSd" value="techAffinity=0.97,environmentalAwareness=1.14,sharingWillingness=0.16,drivingEnjoyment=1.23,perceivedUsefulness=0.9,perceivedEaseOfUse=0.9,trust=0.9,safetyPerception=0.9,perceivedRisk=0.9,perceivedBehaviouralControl=0.9,socialNorm=0.9"/>
             <param name="displayName" value="oepnv_gebundener"/>
             <param name="ageMu" value="39.63"/>
             <param name="ageSd" value="22.26"/>
@@ -215,8 +215,8 @@
         <parameterset type="segmentParams">
             <param name="segmentId" value="familienmitglied_mit_kindern"/>
             <param name="probability" value="0.104"/>
-            <param name="constructs" value="techAffinity=0.29,environmentalAwareness=-0.23,sharingWillingness=-0.15,drivingEnjoyment=0.19,perceivedUsefulness=0.2,perceivedEaseOfUse=0.3,trust=0.1,safetyPerception=0.7,perceivedRisk=0.3,perceivedBehaviouralControl=0.4,socialNorm=0.1"/>
-            <param name="constructsSd" value="techAffinity=0.95,environmentalAwareness=0.84,sharingWillingness=0.22,drivingEnjoyment=0.71,perceivedUsefulness=1,perceivedEaseOfUse=1,trust=1,safetyPerception=1,perceivedRisk=1,perceivedBehaviouralControl=1,socialNorm=1"/>
+            <param name="constructs" value="techAffinity=0.29,environmentalAwareness=-0.23,sharingWillingness=-0.15,drivingEnjoyment=0.19,perceivedUsefulness=0.5,perceivedEaseOfUse=0.3,trust=-0.1,safetyPerception=-0.4,perceivedRisk=0.1,perceivedBehaviouralControl=0.3,socialNorm=0.2"/>
+            <param name="constructsSd" value="techAffinity=0.95,environmentalAwareness=0.84,sharingWillingness=0.22,drivingEnjoyment=0.71,perceivedUsefulness=0.9,perceivedEaseOfUse=0.9,trust=0.9,safetyPerception=0.9,perceivedRisk=0.9,perceivedBehaviouralControl=0.9,socialNorm=0.9"/>
             <param name="displayName" value="familienmitglied_mit_kindern"/>
             <param name="ageMu" value="42.62"/>
             <param name="ageSd" value="8.08"/>
@@ -234,8 +234,8 @@
         <parameterset type="segmentParams">
             <param name="segmentId" value="hochmobiler"/>
             <param name="probability" value="0.0463"/>
-            <param name="constructs" value="techAffinity=0.19,environmentalAwareness=-0.03,sharingWillingness=-0.13,drivingEnjoyment=0.13,perceivedUsefulness=0.4,perceivedEaseOfUse=0.3,trust=0.3,safetyPerception=0.1,perceivedRisk=-0.2,perceivedBehaviouralControl=0.6,socialNorm=0"/>
-            <param name="constructsSd" value="techAffinity=0.99,environmentalAwareness=0.91,sharingWillingness=0.3,drivingEnjoyment=0.72,perceivedUsefulness=1,perceivedEaseOfUse=1,trust=1,safetyPerception=1,perceivedRisk=1,perceivedBehaviouralControl=1,socialNorm=1"/>
+            <param name="constructs" value="techAffinity=0.19,environmentalAwareness=-0.03,sharingWillingness=-0.13,drivingEnjoyment=0.13,perceivedUsefulness=0.8,perceivedEaseOfUse=0.3,trust=0.4,safetyPerception=0.3,perceivedRisk=-0.4,perceivedBehaviouralControl=0.5,socialNorm=0"/>
+            <param name="constructsSd" value="techAffinity=0.99,environmentalAwareness=0.91,sharingWillingness=0.3,drivingEnjoyment=0.72,perceivedUsefulness=0.9,perceivedEaseOfUse=0.9,trust=0.9,safetyPerception=0.9,perceivedRisk=0.9,perceivedBehaviouralControl=0.9,socialNorm=0.9"/>
             <param name="displayName" value="hochmobiler"/>
             <param name="ageMu" value="52.25"/>
             <param name="ageSd" value="13.59"/>
@@ -253,8 +253,8 @@
         <parameterset type="segmentParams">
             <param name="segmentId" value="inaktiver_aelterer"/>
             <param name="probability" value="0.1205"/>
-            <param name="constructs" value="techAffinity=-0.37,environmentalAwareness=-0.24,sharingWillingness=-0.16,drivingEnjoyment=0.23,perceivedUsefulness=-0.6,perceivedEaseOfUse=-0.7,trust=-0.5,safetyPerception=0.8,perceivedRisk=0.7,perceivedBehaviouralControl=-0.7,socialNorm=-0.5"/>
-            <param name="constructsSd" value="techAffinity=1.02,environmentalAwareness=0.9,sharingWillingness=0.12,drivingEnjoyment=0.68,perceivedUsefulness=1,perceivedEaseOfUse=1,trust=1,safetyPerception=1,perceivedRisk=1,perceivedBehaviouralControl=1,socialNorm=1"/>
+            <param name="constructs" value="techAffinity=-0.37,environmentalAwareness=-0.24,sharingWillingness=-0.16,drivingEnjoyment=0.23,perceivedUsefulness=-0.3,perceivedEaseOfUse=-0.8,trust=-0.7,safetyPerception=-0.8,perceivedRisk=0.5,perceivedBehaviouralControl=-0.8,socialNorm=-0.2"/>
+            <param name="constructsSd" value="techAffinity=1.02,environmentalAwareness=0.9,sharingWillingness=0.12,drivingEnjoyment=0.68,perceivedUsefulness=0.9,perceivedEaseOfUse=0.9,trust=0.9,safetyPerception=0.9,perceivedRisk=0.9,perceivedBehaviouralControl=0.9,socialNorm=0.9"/>
             <param name="displayName" value="inaktiver_aelterer"/>
             <param name="ageMu" value="61.53"/>
             <param name="ageSd" value="15.78"/>
@@ -272,8 +272,8 @@
         <parameterset type="segmentParams">
             <param name="segmentId" value="laendlicher"/>
             <param name="probability" value="0.199"/>
-            <param name="constructs" value="techAffinity=0.17,environmentalAwareness=-0.42,sharingWillingness=-0.19,drivingEnjoyment=0.41,perceivedUsefulness=-0.2,perceivedEaseOfUse=0.2,trust=-0.1,safetyPerception=0.3,perceivedRisk=0.1,perceivedBehaviouralControl=0.5,socialNorm=-0.6"/>
-            <param name="constructsSd" value="techAffinity=0.88,environmentalAwareness=0.72,sharingWillingness=0.18,drivingEnjoyment=0.5,perceivedUsefulness=1,perceivedEaseOfUse=1,trust=1,safetyPerception=1,perceivedRisk=1,perceivedBehaviouralControl=1,socialNorm=1"/>
+            <param name="constructs" value="techAffinity=0.17,environmentalAwareness=-0.42,sharingWillingness=-0.19,drivingEnjoyment=0.41,perceivedUsefulness=0.1,perceivedEaseOfUse=0.2,trust=0.2,safetyPerception=0.2,perceivedRisk=0,perceivedBehaviouralControl=-0.3,socialNorm=-0.4"/>
+            <param name="constructsSd" value="techAffinity=0.88,environmentalAwareness=0.72,sharingWillingness=0.18,drivingEnjoyment=0.5,perceivedUsefulness=0.9,perceivedEaseOfUse=0.9,trust=0.9,safetyPerception=0.9,perceivedRisk=0.9,perceivedBehaviouralControl=0.9,socialNorm=0.9"/>
             <param name="displayName" value="laendlicher"/>
             <param name="ageMu" value="49.56"/>
             <param name="ageSd" value="12.99"/>
