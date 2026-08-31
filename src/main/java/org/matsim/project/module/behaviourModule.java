@@ -608,7 +608,18 @@ public final class behaviourModule extends AbstractModule {
         // Schritt 11: PSAV-/SSAV-Flottengroesse zwischen Iterationen an die
         // beobachtete Auslastung anpassen, statt sie starr zu lassen - siehe
         // behaviourDrtFleetSizeController-Javadoc.
-        addControllerListenerBinding().to(behaviourDrtFleetSizeController.class);
+        //
+        // DEAKTIVIERT (2026-08-31): Die Auslastungsschwelle TARGET_UTILIZATION_LOW=0.3
+        // wurde in einem kompletten 30-Iterationen-Lauf nie erreicht (PSAV max. 7%,
+        // SSAV max. 27%), weil die Metrik (befoerderte Personen-Zeit / (Fahrzeuge *
+        // Kapazitaet * Zeit) ueber den GANZEN Tag inkl. Standzeiten) bei PSAV-Kapazitaet=6
+        // strukturell kaum ueber 30% kommen kann. Die Flotte wurde dadurch in JEDER
+        // Iteration um 10% verkleinert (PSAV 600->22, SSAV 1500->57), obwohl objektiv
+        // zu wenige statt zu viele Fahrzeuge da waren: 40,7% aller Personen mit
+        // SAV-Weg im Plan blieben bei Iteration 30 stecken ("lost"). Bis die
+        // Auslastungsmetrik/Schwellenwerte ueberarbeitet sind, bleibt die Flotte
+        // konstant auf der in RunOberlausitzDresdenTest gesetzten Startgroesse.
+        // addControllerListenerBinding().to(behaviourDrtFleetSizeController.class);
 
         // Nullalternative im DCM: konstruiert vor Iteration 0 je Agent einen
         // Kandidatenweg und entscheidet per erweitertem Choice-Set (Nullalternative
