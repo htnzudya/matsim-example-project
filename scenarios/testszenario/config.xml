@@ -69,7 +69,7 @@
              (10pct-Lauf, 112.952 Agenten): Klassen 1-3 zusammen ~10,4% der
              Agenten, Klassen 8-10 zusammen ~14,5%, Klassen 4-7 (Mehrheit,
              ~75,1%) als "mittel" - kein amtlicher MiD/SrV-Schwellenwert. -->
-        <param name="ascNull" value="-4.685500"/>
+        <param name="ascNull" value="-4.714224"/>
         <!-- Nullalternative im DCM (siehe behaviourCandidateTripInserter):
              ascNull per Schritt-9-Bisektion (behaviourCandidateTripInserter.
              calibrateAscNull(), verhaltensmodell.ascNullKalibrierungAktiv=true).
@@ -305,7 +305,7 @@
             <param name="costPerKm" value="0.2"/>
             <param name="costPerKmWithTicket" value="-1"/>
             <param name="deltaByPreviousMode" value="CA=0.831,AV=0,PT=0,PSAV=0,SSAV=0"/>
-            <param name="gamma" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=-0.2,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0.4,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
+            <param name="gamma" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=-0.4,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0.8,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
 
@@ -326,13 +326,13 @@
             <param name="costPerKm" value="0.21"/>
             <param name="costPerKmWithTicket" value="-1"/>
             <param name="deltaByPreviousMode" value="CA=0,AV=0.831,PT=0,PSAV=0,SSAV=0"/>
-            <param name="gamma" value="techAffinity=0.1,environmentalAwareness=0.2,sharingWillingness=-0.4,drivingEnjoyment=-0.1,perceivedUsefulness=0.2,perceivedEaseOfUse=0.1,trust=0.4,safetyPerception=0.2,perceivedRisk=-0.2,perceivedBehaviouralControl=0.2,socialNorm=0.2"/>
+            <param name="gamma" value="techAffinity=0.2,environmentalAwareness=0.4,sharingWillingness=-0.8,drivingEnjoyment=-0.2,perceivedUsefulness=0.4,perceivedEaseOfUse=0.2,trust=0.8,safetyPerception=0.4,perceivedRisk=-0.4,perceivedBehaviouralControl=0.4,socialNorm=0.4"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
 
         <parameterset type="modeParams">
             <param name="mode" value="PT"/>
-            <param name="asc" value="-0.578156"/>
+            <param name="asc" value="-0.665084"/>
             <param name="ascSd" value="0"/>
             <param name="betaInVehicleTime" value="-3.462"/>
             <param name="betaInVehicleTimeSd" value="2.34"/>
@@ -347,7 +347,7 @@
             <param name="costPerKm" value="0.14"/>
             <param name="costPerKmWithTicket" value="0"/>
             <param name="deltaByPreviousMode" value="CA=0,AV=0,PT=0.831,PSAV=0,SSAV=0"/>
-            <param name="gamma" value="techAffinity=0,environmentalAwareness=0.1,sharingWillingness=0,drivingEnjoyment=-0.2,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0.4,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
+            <param name="gamma" value="techAffinity=0,environmentalAwareness=0.2,sharingWillingness=0,drivingEnjoyment=-0.4,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0.8,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
 
@@ -368,7 +368,7 @@
             <param name="costPerKm" value="0.20"/>
             <param name="costPerKmWithTicket" value="-1"/>
             <param name="deltaByPreviousMode" value="CA=0,AV=0,PT=0,PSAV=0.831,SSAV=0"/>
-            <param name="gamma" value="techAffinity=0.4,environmentalAwareness=0,sharingWillingness=0.2,drivingEnjoyment=-0.2,perceivedUsefulness=0.2,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0.4"/>
+            <param name="gamma" value="techAffinity=0.8,environmentalAwareness=0,sharingWillingness=0.4,drivingEnjoyment=-0.4,perceivedUsefulness=0.4,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0.8"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
 
@@ -389,7 +389,7 @@
             <param name="costPerKm" value="0.29"/>
             <param name="costPerKmWithTicket" value="-1"/>
             <param name="deltaByPreviousMode" value="CA=0,AV=0,PT=0,PSAV=0,SSAV=0.831"/>
-            <param name="gamma" value="techAffinity=0.2,environmentalAwareness=0.1,sharingWillingness=0.4,drivingEnjoyment=-0.2,perceivedUsefulness=0.4,perceivedEaseOfUse=0.1,trust=0.4,safetyPerception=0.4,perceivedRisk=-0.2,perceivedBehaviouralControl=0.4,socialNorm=0.4"/>
+            <param name="gamma" value="techAffinity=0.4,environmentalAwareness=0.2,sharingWillingness=0.8,drivingEnjoyment=-0.4,perceivedUsefulness=0.8,perceivedEaseOfUse=0.2,trust=0.8,safetyPerception=0.8,perceivedRisk=-0.4,perceivedBehaviouralControl=0.8,socialNorm=0.8"/>
             <param name="gammaSd" value="techAffinity=0,environmentalAwareness=0,sharingWillingness=0,drivingEnjoyment=0,perceivedUsefulness=0,perceivedEaseOfUse=0,trust=0,safetyPerception=0,perceivedRisk=0,perceivedBehaviouralControl=0,socialNorm=0"/>
         </parameterset>
 
@@ -420,7 +420,7 @@
              baselineAscKalibrierungAktiv=true neu kalibriert werden. -->
         <parameterset type="modeParams">
             <param name="mode" value="BIKE"/>
-            <param name="asc" value="-4.089568"/>
+            <param name="asc" value="-4.106198"/>
             <param name="ascSd" value="0"/>
             <param name="betaInVehicleTime" value="0"/>
             <param name="betaInVehicleTimeSd" value="0"/>
@@ -437,7 +437,7 @@
 
         <parameterset type="modeParams">
             <param name="mode" value="WALK"/>
-            <param name="asc" value="-4.399255"/>
+            <param name="asc" value="-4.415885"/>
             <param name="ascSd" value="0"/>
             <param name="betaInVehicleTime" value="0"/>
             <param name="betaInVehicleTimeSd" value="0"/>
@@ -454,7 +454,7 @@
 
         <parameterset type="modeParams">
             <param name="mode" value="RIDE"/>
-            <param name="asc" value="-4.025808"/>
+            <param name="asc" value="-4.042439"/>
             <param name="ascSd" value="0"/>
             <param name="betaInVehicleTime" value="0"/>
             <param name="betaInVehicleTimeSd" value="0"/>
