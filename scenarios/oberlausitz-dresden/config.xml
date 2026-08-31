@@ -7,7 +7,7 @@
 	</module>
 
 	<module name="controller">
-		<param name="lastIteration" value="30"/>
+		<param name="lastIteration" value="20"/>
 		<param name="overwriteFiles" value="failIfDirectoryExists"/>
 		<param name="runId" value="oberlausitz-dresden-mini"/>
 		<param name="outputDirectory" value="./output/output-oberlausitz-dresden-mini"/>
