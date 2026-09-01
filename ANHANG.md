@@ -52,9 +52,9 @@ git checkout 8638458cf5cb0b700676eafe8fb15d47a5dc655e
 ./mvnw -q exec:java -Dexec.mainClass="org.matsim.project.RunOberlausitzDresdenTest"
 ```
 
-Laufzeit ca. <x> h auf <Hardware, z. B. "16-Kern-CPU, 32 GB RAM">.
-Eingangsdaten: <Quelle/Lizenz der Bevölkerungs-/Netzdaten, Segmentierungs-/Akzeptanzstudie
-(siehe scenarios/testszenario/parameteruebersicht.xlsx)>.
+Laufzeit ca. 7 h auf 6-Kern-CPU, 32 GB RAM.
+Eingangsdaten: projektinterne Segmentierungs-/AVM-Akzeptanzstudie (siehe
+scenarios/testszenario/parameteruebersicht.xlsx); keine gesonderte Lizenz vorhanden.
 
 Für einen reinen Kompilier-/Test-Check genügt `./mvnw -q test`; der volle Simulationslauf
 (`RunOberlausitzDresdenTest`) schreibt seine Ergebnisse nach `output/` (git-ignoriert) und
