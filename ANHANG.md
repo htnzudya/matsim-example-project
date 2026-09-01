@@ -8,10 +8,10 @@ Abgabe:     01.09.2026
 ## Referenzierter Stand
 Repository:   https://github.com/htnzudya/matsim-example-project
 Branch:       main
-Tag:          v1.0-abgabe
-Commit:       8638458cf5cb0b700676eafe8fb15d47a5dc655e
+Tag:          v1.0-abgabe (zeigt auf genau diesen, den finalen Stand inkl. dieser Datei)
+Commit:       siehe Tag - exakter SHA via `git rev-parse v1.0-abgabe`
 Commit-Datum: 2026-09-01
-Permalink:    https://github.com/htnzudya/matsim-example-project/tree/8638458cf5cb0b700676eafe8fb15d47a5dc655e
+Permalink:    https://github.com/htnzudya/matsim-example-project/tree/v1.0-abgabe
 
 ## Inhalt
 ```
@@ -47,7 +47,7 @@ Voraussetzungen: JDK 26+, Maven 3.9+ (Maven Wrapper `./mvnw` ist im Repo enthalt
 ```
 git clone https://github.com/htnzudya/matsim-example-project.git
 cd matsim-example-project
-git checkout 8638458cf5cb0b700676eafe8fb15d47a5dc655e
+git checkout v1.0-abgabe
 ./mvnw -q test
 ./mvnw -q exec:java -Dexec.mainClass="org.matsim.project.RunOberlausitzDresdenTest"
 ```
